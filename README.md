@@ -17,7 +17,7 @@
 | `scripts/` | 分析与检查脚本 |
 | `docs/` | 计划、仿真预研记录 |
 | `reference/` | 原样归档、不维护的代码（RK3588 转换与板端、HAQ、量化；早期 SO101 探索；预研时的流水线脚本），见 [reference/README.md](reference/README.md) |
-| `runs/`、`artifacts/` | 运行产物与模型/数据（Git 忽略） |
+| `runs/`、`artifacts/` | 运行产物与模型/数据（Git 忽略）；`runs/qvla_rk3588/` 为 QVLA 中 smolvla_base 的 RK3588 转换与测速产物（`base_rk3588_speed_v1` 等，说明见 `reference/qvla_rk3588/docs/project-route.md` 末尾几节） |
 
 ## 代码（`so101vla/`）
 
@@ -47,3 +47,5 @@ $PY -m so101vla.scripted --config configs/so101_dagger_r1.json --model-dir runs/
 ```
 
 基础模型 `artifacts/smolvla_base`（`lerobot/smolvla_base`）与 VLM 资源 `artifacts/transfer/smolvlm2_assets` 需放在 `artifacts/` 下。
+
+`.venv` 由 QVLA 的 `.venv-haq-local` 移来，其中 libero 包的 assets 软链接已失效（本项目不用 libero）。
