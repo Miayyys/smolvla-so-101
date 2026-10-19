@@ -42,9 +42,12 @@
 ```bash
 export PYTHONPATH=$PWD MUJOCO_GL=egl SO101_NEXUS_SOURCE=/home/loser/Study/so101-nexus   # Nexus @ 7bdb671
 PY=.venv/bin/python   # torch 2.7.1+cu118, lerobot 0.6.1, mujoco 3.8.1, numpy 2.2.6
-$PY -m so101vla.train --config configs/so101_dagger_r1.json --stage prepare
-$PY -m so101vla.scripted --config configs/so101_dagger_r1.json --model-dir runs/so101_dagger_r1/last --output runs/eval_x --execute 10 --stop-on-success
+$PY -m so101vla.generate_data --config configs/so101_scripted_data_v2.json
+$PY -m so101vla.train --config configs/so101_scripted_full_v2.json --stage prepare
+$PY -m so101vla.scripted --config configs/so101_scripted_full_v2.json --model-dir <checkpoint> --output runs/eval_x --execute 10 --stop-on-success
 ```
+
+仿真预研的模型与数据已删除（2026-10-19），`runs/so101_*`、`runs/so100_*` 只保留文本结果，见 [docs/prestudy-sim/so101-artifacts.md](docs/prestudy-sim/so101-artifacts.md)。
 
 基础模型 `artifacts/smolvla_base`（`lerobot/smolvla_base`）与 VLM 资源 `artifacts/transfer/smolvlm2_assets` 需放在 `artifacts/` 下。
 
