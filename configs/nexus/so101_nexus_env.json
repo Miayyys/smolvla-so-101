@@ -1,0 +1,32 @@
+{
+  "envs": {
+    "MuJoCoPickAndPlace-v1": {
+      "object_specs": [
+        "cube:red"
+      ],
+      "n_distractors": 0,
+      "ground_colors": [
+        "gray"
+      ],
+      "robot_colors": [
+        "yellow"
+      ],
+      "cube_colors": [
+        "red"
+      ],
+      "target_colors": [
+        "blue"
+      ],
+      "cube_a_colors": [
+        "red"
+      ],
+      "cube_b_colors": [
+        "blue"
+      ],
+      "spawn_min_radius": 0.1,
+      "spawn_max_radius": 0.3,
+      "spawn_angle_half_range_deg": 90.0,
+      "reset_settle_frames": 5
+    }
+  }
+}
