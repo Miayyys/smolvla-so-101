@@ -2,6 +2,8 @@
 
 > 迁移说明：本文为毕设前期仿真预研记录，2026-10-19 从 QVLA（分支 `experiment/so101-goal-conditioned` @ `949f701`）原样迁入。文中 `qvla/evaluation/...`、`config/...`、`scripts/...` 指 QVLA 中的旧位置，新项目对应模块见 [../../README.md](../../README.md)；`runs/` 路径指当时 QVLA 的运行目录（迁移后的位置见 [so101-artifacts.md](so101-artifacts.md)）。链接到 `project-route.md` 等 QVLA 文档的，见 `reference/qvla_rk3588/docs/`。
 
+> 产物清理（2026-10-19）：仿真预研只用于探索方法、得出大致结论，下文所列模型、checkpoint、训练状态、示教/DAgger 数据（`.jpeg.bin`、`.npz`、`.safetensors`、`training_state.pt`、gif/trace 等）已全部删除；各 `runs/so101_*`、`runs/so100_*` 目录只保留 ≤5MB 的文本结果（json/jsonl/log/md 等，共 282 个文件），文档中的数字可据此核对。示教数据可按 `configs/so101_scripted_data_v2.json` 重新生成（按种子确定）；基线 A、DAgger 数据与各模型不可恢复，需要时按记录重新训练。下文 SHA256 仅作历史记录。
+
 分支`experiment/so101-goal-conditioned`（远端`smolvla-rk3588`）。本地RTX 4060 Laptop；GPUServer已停机。产物在主仓库`runs/`（Git忽略；worktree中的`runs/`、`artifacts/`为指向主仓库的软链接，已加入本地exclude）。环境：`.venv-haq-local`，Nexus源码`/home/loser/Study/so101-nexus`（`7bdb671`）。
 
 ## 1. 文档
