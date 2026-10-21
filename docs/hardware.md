@@ -4,7 +4,7 @@
 
 | 部件 | 设备路径（用 by-id，`/dev/ttyACM*`、`/dev/video*` 编号重启/插拔后会变） | 实测 |
 |---|---|---|
-| 舵机板 | `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B14111527-if00`、`/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B14031528-if00`（哪块是主/从臂以 `lerobot-find-port` 为准） | 两块板 ID 1–6 均应答，型号 777（STS3215），1 Mbps；出厂已设 ID，无需 `lerobot-setup-motors` |
+| 舵机板 | 从臂 `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B14111527-if00`，主臂 `/dev/serial/by-id/usb-1a86_USB_Single_Serial_5B14031528-if00`（用户拔插确认；路径写在 `scripts/so101_env.fish`） | 两块板 ID 1–6 均应答，型号 777（STS3215），1 Mbps；出厂已设 ID，无需 `lerobot-setup-motors` |
 | 顶视相机 | `/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._USB_2.0_Camera-video-index0`（USB `0c45:6368`） | 见下；画面相对桌面旋转约 90° |
 | 腕部相机 | `/dev/v4l/by-id/usb-ZSKJ-260319-K_Integrated_Webcam_HD-video-index0`（USB `0c45:64ab`） | 640×480 MJPG 实测 30.0 fps；有 `auto_exposure` / `exposure_time_absolute` 控制 |
 
