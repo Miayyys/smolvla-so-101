@@ -49,37 +49,33 @@ Ctrl+C 退出。第一次运行手放在电源附近。
 
 ## 5. 录制示教数据
 
+用 `scripts/record.fish`（推荐，不需要先 `uv activate`/`source`）：
+
 ```fish
-echo $CAMERAS                    # 先确认非空（应看到 top 和 wrist）
-lerobot-record \
-  --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower --robot.cameras=$CAMERAS \
-  --teleop.type=so101_leader --teleop.port=$LEADER --teleop.id=leader \
-  --display_data=true \
-  --dataset.repo_id=local/so101_toy_key_pilot \
-  --dataset.root=artifacts/datasets/so101_toy_key_pilot \
-  --dataset.single_task="Put the toy in the left box and the key in the right box." \
-  --dataset.num_episodes=5 --dataset.episode_time_s=40 --dataset.reset_time_s=15 \
-  --dataset.push_to_hub=false
+# 第一次：新建数据集
+fish scripts/record.fish -n so101_key_pilot -t "Put the key in the white box." -e 5 -s 40
+# 之后每次：追加到同一数据集（-e 是本次新录段数）
+fish scripts/record.fish -n so101_key_pilot -t "Put the key in the white box." -e 10 -s 40 --resume
 ```
 
-- 每个新数据集换 `repo_id`/`root` 名字；`single_task` 写实际做的事（训练时作为语言指令）；`episode_time_s` 按任务长短设。
-- 按键（焦点在运行 lerobot 的终端；Wayland 下读终端按键）：`→`/`n` 提前结束本段，`←`/`r` 重录本段，`Esc`/`q` 停止。
-- 分多次录同一个数据集：第一次照上面运行（`--dataset.root` 目录不能事先存在）；之后每次用**同一条命令末尾加 `--resume=true`**，新段追加到同一数据集，`--dataset.num_episodes` 是本次要新录的段数。续录时 LeRobot 会检查相机、fps、特征与已有数据一致（`sanity_check_dataset_robot_compatibility`），所以相机配置、`repo_id`、`root` 都不要改。不同任务用不同数据集名。
-- 2026-10-21 第一次试录（`so101_pickplace_pilot`，2 段）因 `$CAMERAS` 为空没有图像，已删除。
-- 一定带 `--dataset.push_to_hub=false`（默认会上传 HuggingFace）。数据放 `artifacts/datasets/`（Git 忽略）。
-- 录之前 `echo $CAMERAS` 确认非空：`--robot.cameras=` 为空时 LeRobot 不报错，会录成没有图像的数据集（2026-10-21 第一次试录即因此没有相机）。`scripts/so101_env.fish` 改过后要重新 `source`。
-- 录完可检查：`python -c "import json; print(list(json.load(open('<root>/meta/info.json'))['features']))"` 应包含 `observation.images.top` 和 `observation.images.wrist`。
+脚本每次自己 `source scripts/so101_env.fish`，串口/相机缺失或 `$CAMERAS` 为空时拒绝启动；目录已存在而没加 `--resume` 时拒绝（不会覆盖）；固定 `--dataset.push_to_hub=false`、`--display_data=true`，数据存 `artifacts/datasets/<name>`；录完检查数据集是否含 `observation.images.top` 与 `observation.images.wrist`，缺了会打印 WARNING 并以非 0 退出。参数：`-n` 数据集名，`-t` 任务描述，`-e` 段数（默认 5），`-s` 每段秒数（默认 40），`-r` 复位秒数（默认 15）。
+
+- `-t` 写实际做的事（训练时作为语言指令）；同一数据集续录时 `-t` 保持一致。不同任务用不同数据集名。
+- 按键（焦点在运行脚本的终端；Wayland 下读终端按键）：`→`/`n` 提前结束本段，`←`/`r` 重录本段，`Esc`/`q` 停止（已录完的段会保存）。
+- 续录时 LeRobot 会检查相机、fps、特征与已有数据一致（`sanity_check_dataset_robot_compatibility`），相机配置不要改。
+- 直接用 `lerobot-record` 时：先 `source scripts/so101_env.fish` 并 `echo $CAMERAS` 确认非空——`--robot.cameras=` 为空时 LeRobot 不报错，会录成没有图像的数据集；一定带 `--dataset.push_to_hub=false`。参数写法见 `scripts/record.fish`。
+- 2026-10-21 前两次试录（`so101_pickplace_pilot` 2 段、`so101_key_pilot` 1 段）都因终端里的 `$CAMERAS` 为空（`CAMERAS` 加入 env 文件后没重新 `source`）而没有图像，已删除；之后改用 `scripts/record.fish`。
 - 录制要点：主臂和人手不进顶视画面；固定光照（拉窗帘、开灯）；每段同一起始姿态；物体位置在工作区内分散；失败或犹豫的段按 `r` 重录。
 
 ## 6. 查看与回放数据
 
 ```fish
 # 用 rerun 查看某一段（相机画面 + 关节曲线）
-lerobot-dataset-viz --repo-id local/so101_toy_key_pilot --root artifacts/datasets/so101_toy_key_pilot --episode-index 0
+lerobot-dataset-viz --repo-id local/so101_key_pilot --root artifacts/datasets/so101_key_pilot --episode-index 0
 
 # 让从臂重放某一段的动作（会真的动，注意周围）
 lerobot-replay --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower \
-  --dataset.repo_id=local/so101_toy_key_pilot --dataset.root=artifacts/datasets/so101_toy_key_pilot --dataset.episode=0
+  --dataset.repo_id=local/so101_key_pilot --dataset.root=artifacts/datasets/so101_key_pilot --dataset.episode=0
 ```
 
 换数据集时把 `repo_id`、`root` 换成对应名字，`episode`/`episode-index` 从 0 开始。
