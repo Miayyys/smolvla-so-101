@@ -50,17 +50,20 @@ Ctrl+C 退出。第一次运行手放在电源附近。
 ## 5. 录制示教数据
 
 ```fish
+echo $CAMERAS                    # 先确认非空（应看到 top 和 wrist）
 lerobot-record \
   --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower --robot.cameras=$CAMERAS \
   --teleop.type=so101_leader --teleop.port=$LEADER --teleop.id=leader \
   --display_data=true \
-  --dataset.repo_id=local/so101_pickplace_pilot \
-  --dataset.root=artifacts/datasets/so101_pickplace_pilot \
-  --dataset.single_task="Pick up the cube and place it in the box." \
-  --dataset.num_episodes=5 --dataset.episode_time_s=30 --dataset.reset_time_s=15 \
+  --dataset.repo_id=local/so101_toy_key_pilot \
+  --dataset.root=artifacts/datasets/so101_toy_key_pilot \
+  --dataset.single_task="Put the toy in the left box and the key in the right box." \
+  --dataset.num_episodes=5 --dataset.episode_time_s=40 --dataset.reset_time_s=15 \
   --dataset.push_to_hub=false
 ```
 
+- 每个新数据集换 `repo_id`/`root` 名字；`single_task` 写实际做的事（训练时作为语言指令）；`episode_time_s` 按任务长短设。
+- 已有数据集：`so101_pickplace_pilot`（2026-10-21，2 段，玩偶与钥匙放两个盒子，**无相机图像**，任务描述误写为 cube/box，仅可回放关节动作）。
 - 按键（焦点在运行 lerobot 的终端；Wayland 下读终端按键）：`→`/`n` 提前结束本段，`←`/`r` 重录本段，`Esc`/`q` 停止。
 - `--dataset.root` 目录不能事先存在；在已有数据集后继续录加 `--resume=true`（其他参数保持一致）。
 - 一定带 `--dataset.push_to_hub=false`（默认会上传 HuggingFace）。数据放 `artifacts/datasets/`（Git 忽略）。
@@ -72,12 +75,14 @@ lerobot-record \
 
 ```fish
 # 用 rerun 查看某一段（相机画面 + 关节曲线）
-lerobot-dataset-viz --repo-id local/so101_pickplace_pilot --root artifacts/datasets/so101_pickplace_pilot --episode-index 0
+lerobot-dataset-viz --repo-id local/so101_toy_key_pilot --root artifacts/datasets/so101_toy_key_pilot --episode-index 0
 
 # 让从臂重放某一段的动作（会真的动，注意周围）
 lerobot-replay --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower \
-  --dataset.repo_id=local/so101_pickplace_pilot --dataset.root=artifacts/datasets/so101_pickplace_pilot --dataset.episode=0
+  --dataset.repo_id=local/so101_toy_key_pilot --dataset.root=artifacts/datasets/so101_toy_key_pilot --dataset.episode=0
 ```
+
+换数据集时把 `repo_id`、`root` 换成对应名字，`episode`/`episode-index` 从 0 开始。
 
 ## 7. 训练与评测
 
