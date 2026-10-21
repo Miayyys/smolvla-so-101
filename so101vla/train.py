@@ -33,23 +33,45 @@ def emit(out, event):
     print(json.dumps(event), flush=True)
 
 
+def camera_map(cfg):
+    """Model camera key -> dataset video key (default: the old single top camera as camera1)."""
+    return cfg.get('camera_map', {'observation.images.camera1': 'observation.images.top'})
+
+
+def cache_name(video_key):
+    return video_key.split('.')[-1] + '_frames.jpeg.bin'
+
+
 def prepare(cfg, out):
+    """Cache a LeRobot v3 dataset (any number of data/video files) as per-camera JPEG streams.
+
+    Every episode's frames are decoded from its own video file segment (``from_timestamp`` in the episode
+    metadata) and checked frame by frame against the table timestamps; a few rows are compared with LeRobot's
+    own reader. Normalization statistics use training episodes only.
+    """
     import av
-    import pyarrow.parquet as pq
+    import pandas as pd
     from PIL import Image
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
     root = Path(cfg['dataset_root'])
+    info = json.loads((root / 'meta/info.json').read_text())
+    fps = info['fps']
     partition = json.loads(Path(cfg['partition']).read_text())
-    table_path = root / 'data/chunk-000/file-000.parquet'
-    table = pq.read_table(table_path)
-    eps = np.asarray(table['episode_index'])
     splits = partition['splits']
     assert all(not set(splits[a]) & set(splits[b]) for a, b in [('train', 'validation'), ('train', 'test'), ('validation', 'test')])
-    train_rows = np.flatnonzero(np.isin(eps, splits['train']))
+    data_files = sorted((root / 'data').rglob('*.parquet'))
+    table = pd.concat([pd.read_parquet(p) for p in data_files]).sort_values('index').reset_index(drop=True)
+    if not np.array_equal(table['index'].to_numpy(), np.arange(len(table))):
+        raise ValueError('Dataset rows are not a contiguous 0..N-1 index')
+    eps = table['episode_index'].to_numpy()
+    if not set(eps) == set(splits['train']) | set(splits['validation']) | set(splits['test']):
+        raise ValueError('Partition does not cover exactly the dataset episodes')
     train = np.isin(eps, splits['train'])
-    states = np.asarray(table['observation.state'].to_pylist(), dtype='float32')
-    actions = np.asarray(table['action'].to_pylist(), dtype='float32')
+    train_rows = np.flatnonzero(train)
+    states = np.stack(table['observation.state'].to_numpy()).astype('float32')
+    actions = np.stack(table['action'].to_numpy()).astype('float32')
+    timestamps = table['timestamp'].to_numpy(dtype='float64')
     stats = {key: {'mean': a[train].mean(0).tolist(), 'std': np.maximum(a[train].std(0), 1e-6).tolist()}
              for key, a in [('observation.state', states), ('action', actions)]}
     end_rows = np.empty(len(eps), dtype='int64')
@@ -60,83 +82,104 @@ def prepare(cfg, out):
         end_rows[rows] = rows[-1]
         if ep in splits['validation']:
             validation_rows.extend(np.linspace(rows[0], max(rows[0], rows[-1] - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
-    metadata = pq.read_table(root / 'meta/episodes/chunk-000/file-000.parquet').to_pylist()
-    timestamps = np.asarray(table['timestamp'], dtype='float64')
-    expected = timestamps.copy()
-    for episode in metadata:
-        ep = episode['episode_index']
-        expected[eps == ep] += episode['videos/observation.images.top/from_timestamp']
-    video = root / 'videos/observation.images.top/chunk-000/file-000.mp4'
-    cache_path = out / 'top_frames.jpeg.bin'
-    offsets, lengths = [], []
-    max_alignment_error = 0.0
-    samples = {}
+    episodes = pd.concat([pd.read_parquet(p) for p in sorted((root / 'meta/episodes').rglob('*.parquet'))]).set_index('episode_index')
+
     selected_checks = [0, len(eps) // 2, len(eps) - 1]
-    with av.open(str(video)) as container, (out / 'top_frames.partial').open('wb') as target:
-        container.streams.video[0].thread_type = 'AUTO'
-        count = 0
-        for frame in container.decode(video=0):
-            if count >= len(eps):
-                raise ValueError('Video has more frames than table; need explicit timestamp mapping')
-            error = abs(float(frame.pts * frame.time_base) - expected[count])
-            max_alignment_error = max(max_alignment_error, error)
-            if error > 1e-4:
-                raise ValueError(f'Video/table timestamp mismatch at {count}: {error}')
-            array = frame.to_ndarray(format='rgb24')
-            buffer = io.BytesIO()
-            Image.fromarray(array).save(buffer, format='JPEG', quality=95, subsampling=0)
-            data = buffer.getvalue()
-            offsets.append(target.tell()); lengths.append(len(data)); target.write(data)
-            if count in selected_checks:
-                samples[count] = array
-            count += 1
-            if count % 2000 == 0:
-                emit(out, {'stage': 'cache', 'frames': count, 'total': len(eps)})
-    if count != len(eps):
-        raise ValueError('Video/table frame count mismatch')
-    (out / 'top_frames.partial').replace(cache_path)
-    # The official reader independently validates RGB decoding/time offsets.
-    dataset = LeRobotDataset('lerobot/svla_so100_pickplace', root=root.resolve(), video_backend='pyav', return_uint8=True)
-    with cache_path.open('rb') as stream:
-        rgb_errors = []
-        for row in selected_checks:
-            official = dataset[row]['observation.images.top'].permute(1, 2, 0).numpy()
-            if not np.array_equal(official, samples[row]):
-                raise ValueError('Sequential decoder differs from official LeRobot RGB frame')
-            stream.seek(offsets[row]); image = np.asarray(Image.open(io.BytesIO(stream.read(lengths[row]))).convert('RGB'))
-            rgb_errors.append(float(np.abs(image.astype('float32') - official).mean()))
+    arrays = {}
+    caches = {}
+    max_alignment_error = 0.0
+    for video_key in camera_map(cfg).values():
+        cache_path = out / cache_name(video_key)
+        partial = cache_path.with_suffix('.partial')
+        offsets = np.zeros(len(eps), dtype='int64'); lengths = np.zeros(len(eps), dtype='int64')
+        with partial.open('wb') as target:
+            for ep in sorted(set(eps.tolist())):
+                rows = np.flatnonzero(eps == ep)
+                meta = episodes.loc[ep]
+                path = root / info['video_path'].format(video_key=video_key, chunk_index=int(meta[f'videos/{video_key}/chunk_index']),
+                                                        file_index=int(meta[f'videos/{video_key}/file_index']))
+                expected = float(meta[f'videos/{video_key}/from_timestamp']) + timestamps[rows]
+                count = 0
+                with av.open(str(path)) as container:
+                    stream = container.streams.video[0]
+                    stream.thread_type = 'AUTO'
+                    container.seek(int(max(expected[0] - 1.0, 0) / stream.time_base), stream=stream)
+                    for frame in container.decode(stream):
+                        t = float(frame.pts * stream.time_base)
+                        if t < expected[0] - 0.5 / fps:
+                            continue
+                        if count == len(rows):
+                            break
+                        error = abs(t - expected[count])
+                        max_alignment_error = max(max_alignment_error, error)
+                        if error > 1e-3:
+                            raise ValueError(f'{video_key} episode {ep}: video/table timestamp mismatch at frame {count}: {error}')
+                        array = frame.to_ndarray(format='rgb24')
+                        buffer = io.BytesIO()
+                        Image.fromarray(array).save(buffer, format='JPEG', quality=95, subsampling=0)
+                        data = buffer.getvalue()
+                        row = rows[count]
+                        offsets[row] = target.tell(); lengths[row] = len(data); target.write(data)
+                        if row in selected_checks:
+                            arrays[(video_key, row)] = array
+                        count += 1
+                if count != len(rows):
+                    raise ValueError(f'{video_key} episode {ep}: {count} video frames for {len(rows)} table rows')
+                emit(out, {'stage': 'cache', 'camera': video_key, 'episode': int(ep), 'frames': int(rows[-1]) + 1, 'total': len(eps)})
+        partial.replace(cache_path)
+        caches[video_key] = {'offsets': offsets, 'lengths': lengths, 'sha256': sha(cache_path), 'bytes': cache_path.stat().st_size}
+
+    # LeRobot's own reader independently validates RGB decoding and time offsets.
+    dataset = LeRobotDataset(info.get('repo_id', 'local/dataset'), root=root.resolve(), video_backend='pyav', return_uint8=True)
+    rgb_errors = {}
+    for video_key in camera_map(cfg).values():
+        rgb_errors[video_key] = []
+        with (out / cache_name(video_key)).open('rb') as stream:
+            for row in selected_checks:
+                official = dataset[row][video_key].permute(1, 2, 0).numpy()
+                if not np.array_equal(official, arrays[(video_key, row)]):
+                    raise ValueError(f'{video_key}: sequential decoder differs from official LeRobot RGB frame at row {row}')
+                stream.seek(caches[video_key]['offsets'][row])
+                image = np.asarray(Image.open(io.BytesIO(stream.read(int(caches[video_key]['lengths'][row])))).convert('RGB'))
+                rgb_errors[video_key].append(float(np.abs(image.astype('float32') - official).mean()))
     np.savez(out / 'data.npz', states=states, actions=actions, episodes=eps, end_rows=end_rows,
-             train_rows=train_rows, validation_rows=validation_rows, offsets=offsets, lengths=lengths)
+             train_rows=train_rows, validation_rows=validation_rows,
+             **{f'{k.split(".")[-1]}_{name}': c[name] for k, c in caches.items() for name in ('offsets', 'lengths')})
     (out / 'stats.json').write_text(json.dumps(stats, indent=2) + '\n')
     manifest = {'config': cfg, 'splits': splits, 'frames': len(eps), 'train_frames': len(train_rows),
-                'validation_rows': validation_rows, 'dataset_sha256': sha(table_path),
-                'video_sha256': sha(video), 'partition_sha256': sha(cfg['partition']),
-                'cache_sha256': sha(cache_path), 'cache_bytes': cache_path.stat().st_size,
+                'validation_rows': validation_rows,
+                'data_sha256': {str(p.relative_to(root)): sha(p) for p in data_files},
+                'partition_sha256': sha(cfg['partition']),
+                'caches': {k: {'sha256': c['sha256'], 'bytes': c['bytes']} for k, c in caches.items()},
                 'max_timestamp_error_s': max_alignment_error, 'jpeg_rgb_mae_0_255': rgb_errors,
                 'official_decoder_exact_checks': selected_checks,
                 'stats_sha256': sha(out / 'stats.json')}
     (out / 'prepared.json').write_text(json.dumps(manifest, indent=2) + '\n')
-    emit(out, {'stage': 'prepared', 'train_frames': len(train_rows), 'cache_bytes': manifest['cache_bytes']})
+    emit(out, {'stage': 'prepared', 'train_frames': len(train_rows), 'validation_rows': len(validation_rows),
+               'cache_bytes': {k: c['bytes'] for k, c in caches.items()}, 'max_timestamp_error_s': max_alignment_error})
 
 
 class Frames:
-    def __init__(self, out, task):
-        self.data = np.load(out / 'data.npz')
-        self.stream = (out / 'top_frames.jpeg.bin').open('rb')
-        self.task = task
+    def __init__(self, out, cfg):
+        self.data = {k: v for k, v in np.load(out / 'data.npz').items()}
+        self.camera_map = camera_map(cfg)
+        self.streams = {key: (out / cache_name(video_key)).open('rb') for key, video_key in self.camera_map.items()}
+        self.task = cfg['task']
 
     def batch(self, rows):
         import torch
         from PIL import Image
-        images, actions, masks = [], [], []
+        images = {key: [] for key in self.camera_map}; actions, masks = [], []
         for row in rows:
-            self.stream.seek(int(self.data['offsets'][row]))
-            image = Image.open(io.BytesIO(self.stream.read(int(self.data['lengths'][row])))).convert('RGB')
-            images.append(torch.from_numpy(np.asarray(image).copy()).permute(2, 0, 1))
+            for key, video_key in self.camera_map.items():
+                cam = video_key.split('.')[-1]
+                self.streams[key].seek(int(self.data[f'{cam}_offsets'][row]))
+                image = Image.open(io.BytesIO(self.streams[key].read(int(self.data[f'{cam}_lengths'][row])))).convert('RGB')
+                images[key].append(torch.from_numpy(np.asarray(image).copy()).permute(2, 0, 1))
             indices = row + np.arange(50)
             masks.append(indices > self.data['end_rows'][row])
             actions.append(self.data['actions'][np.minimum(indices, self.data['end_rows'][row])])
-        return {'observation.images.camera1': torch.stack(images).float() / 255,
+        return {**{key: torch.stack(v).float() / 255 for key, v in images.items()},
                 'observation.state': torch.from_numpy(self.data['states'][rows].copy()),
                 'action': torch.from_numpy(np.stack(actions)),
                 'action_is_pad': torch.from_numpy(np.stack(masks)), 'task': [self.task] * len(rows)}
@@ -185,7 +228,7 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
         from so101vla.scripted import ScriptedFrames
         frames = ScriptedFrames(cfg, out)
     else:
-        frames = Frames(out, cfg['task'])
+        frames = Frames(out, cfg)
     parameters = [(n, p) for n, p in policy.named_parameters() if p.requires_grad]
     if any('.vlm.' in n for n, _ in parameters):
         raise ValueError('VLM unexpectedly trainable')

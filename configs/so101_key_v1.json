@@ -1,0 +1,31 @@
+{
+  "model_dir": "artifacts/smolvla_base",
+  "vlm_assets_dir": "artifacts/transfer/smolvlm2_assets",
+  "dataset_root": "artifacts/datasets/so101_key_pilot",
+  "partition": "configs/so101_key_v1_partition.json",
+  "output": "runs/so101_key_v1",
+  "seed": 42,
+  "task": "Put the key in the white box.",
+  "camera_map": {
+    "observation.images.camera1": "observation.images.top",
+    "observation.images.camera2": "observation.images.wrist"
+  },
+  "image_size": 512,
+  "batch_size": 16,
+  "gradient_accumulation": 4,
+  "steps": 10000,
+  "learning_rate": 0.0001,
+  "minimum_learning_rate": 2.5e-06,
+  "warmup_steps": 1000,
+  "weight_decay": 1e-10,
+  "gradient_clip": 10.0,
+  "eval_every": 500,
+  "minimum_steps": 10000,
+  "patience_evaluations": 1000,
+  "validation_frames_per_episode": 10,
+  "save_last": true,
+  "evaluation": "real_offline",
+  "training_scope": "official default: freeze VLM; update all 16 action expert layers, state and action interfaces",
+  "schedule_source": "LeRobot SmolVLA defaults (lr 1e-4, betas 0.9/0.95, weight decay 1e-10, clip 10, warmup 1000, cosine to 2.5e-6), shortened to 10000 steps; effective batch 64 = 16 x 4 accumulation on the local RTX 4060 8 GB",
+  "data_scope": "first real-arm baseline: 49 teleoperated SO-101 episodes (44 train / 5 validation by episode); top 1280x720 -> camera1, wrist 640x480 -> camera2, both resized with padding to 512; offline validation is action MAE on held-out episodes, not task success"
+}
