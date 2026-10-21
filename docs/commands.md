@@ -115,7 +115,7 @@ uv run python scripts/check_dataset.py artifacts/datasets/so101_key_pilot --shee
 
 ## 7. 训练与评测
 
-训练（`so101vla/train.py`；配置与结果见 [real-baseline-key-v1.md](real-baseline-key-v1.md)）：
+训练（`so101vla/train.py`；每个实验一个记录，见 [experiments/](experiments/)，如 [实验一](experiments/exp1-key-v1.md)）：
 
 ```fish
 uv run python -m so101vla.train --config configs/so101_key_v1.json --stage prepare   # 解码视频、算训练段统计、写缓存

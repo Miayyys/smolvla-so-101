@@ -82,16 +82,14 @@ set after (uv run --frozen python -c "import json,sys; print(json.load(open(sys.
 set csv runs/real_eval/$_flag_name.csv
 mkdir -p runs/real_eval
 test -f $csv; or echo 'episode,success,policy,task,time,note' >$csv
-echo "saved episodes $before..(math $after - 1); mark each: y = success, n = failure, s = skip (not counted)"
+echo "saved episodes $before.."(math $after - 1)"; mark each: y = success, n = failure, s = skip (not counted)"
 for ep in (seq $before (math $after - 1))
     while true
         read -P "episode $ep success? [y/n/s] " answer
         contains -- $answer y n s; and break
     end
     test $answer = s; and continue
-    read -P 'note (optional): ' note
-    set note (string replace -a ',' ';' -- $note)
-    echo "$ep,"(test $answer = y; and echo 1; or echo 0)",$_flag_policy,$_flag_task,"(date -Iseconds)",$note" >>$csv
+    echo "$ep,"(test $answer = y; and echo 1; or echo 0)",$_flag_policy,$_flag_task,"(date -Iseconds)"," >>$csv
 end
 uv run --frozen python -c "
 import csv, sys
