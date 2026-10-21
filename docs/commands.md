@@ -94,7 +94,20 @@ lerobot-replay --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=fol
 
 换数据集时把 `repo_id`、`root` 换成对应名字，`episode`/`episode-index` 从 0 开始。
 
-检查数据质量（每段时长、时间戳、视频帧数、运动中的重复帧比例、关节/动作范围；`--sheet` 存每段首/中/末帧拼图）：
+删除指定段（段号从 0 开始；先另存为新数据集，检查后再替换，原数据集留作备份）：
+
+```fish
+lerobot-edit-dataset --repo_id local/so101_key_pilot --root artifacts/datasets/so101_key_pilot \
+  --new_repo_id local/so101_key_pilot --new_root artifacts/datasets/so101_key_pilot_clean \
+  --operation.type delete_episodes --operation.episode_indices "[19, 20]"
+uv run python scripts/check_dataset.py artifacts/datasets/so101_key_pilot_clean    # 段数、帧数对得上再替换
+mv artifacts/datasets/so101_key_pilot artifacts/datasets/so101_key_pilot_backup
+mv artifacts/datasets/so101_key_pilot_clean artifacts/datasets/so101_key_pilot
+```
+
+删除后后面的段号会前移。2026-10-21 `so101_key_pilot` 原第 19、20 段（10–12 s，机械臂没动，第 20 段顶视里有人手在摆物体：复位阶段多按了一次 `n`，把摆放录成了示教）即这样删除，26 段 → 24 段、19525 → 18864 帧，原数据集备份为 `so101_key_pilot_backup_26ep`。
+
+检查数据质量（每段时长、时间戳、视频帧数、运动中的重复帧比例、关节/动作范围；`--sheet` 存每段首/中/末帧拼图）。`moving 0%` 的段机械臂没动，多半是误录，应删除：
 
 ```fish
 uv run python scripts/check_dataset.py artifacts/datasets/so101_key_pilot --sheet /tmp/key_pilot_sheet.jpg
