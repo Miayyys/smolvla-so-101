@@ -115,7 +115,28 @@ uv run python scripts/check_dataset.py artifacts/datasets/so101_key_pilot --shee
 
 ## 7. 训练与评测
 
-真机数据的训练配置待定（基于 `so101vla/train.py`，prepare 阶段读取 LeRobot 数据集）；写好后补充到这里。
+训练（`so101vla/train.py`；配置与结果见 [real-baseline-key-v1.md](real-baseline-key-v1.md)）：
+
+```fish
+uv run python -m so101vla.train --config configs/so101_key_v1.json --stage prepare   # 解码视频、算训练段统计、写缓存
+uv run python -m so101vla.train --config configs/so101_key_v1.json --stage train     # 加 --resume 从 last/ 接着训练
+tail -f runs/so101_key_v1/train.log                                                  # validation 行是验证误差
+```
+
+真机测试（`scripts/eval.fish`，不需要先 `uv activate`/`source`）：
+
+```fish
+# 第一次：新建评测数据集（名字必须以 rollout_ 开头）
+fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." -p runs/so101_key_v1/best -e 10 -s 40
+# 继续测（追加到同一评测集）
+fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." -p runs/so101_key_v1/best -e 10 -s 40 --resume
+```
+
+- 不接主臂：脚本启动时从臂所处姿态就是"起始姿态"，每段结束后从臂 1 秒内回到该姿态并保持。所以**启动前把从臂摆到录示教时的起始姿态**。
+- 流程（每段）：听到 `Recording episode N` → 模型控制从臂（首次推理约 0.6 s，之后每 50 步/1.7 s 停顿约 0.17 s 推理）→ 成功或明显失败后按 `n` → 从臂回起始姿态 → 摆好物体按 `n` 开始下一段。`r` 重测本段（该段不保存），`q` 停止。
+- **安全**：第一次手放在电源旁；从臂乱动、顶桌面或卡住时立刻按 `q`，或 Ctrl+C，或断电。
+- 结束后脚本逐段问是否成功（`y`/`n`/`s` 跳过不计），追加到 `runs/real_eval/<name>.csv` 并打印成功率；评测录像存在 `artifacts/datasets/<name>`，可用 §6 的 `lerobot-dataset-viz` 回看。
+- 训练用的任务文本、相机配置要与录制一致；物体摆放用训练中出现过的范围，另行记录摆放位置。
 
 ## 8. 环境管理（uv）
 
