@@ -39,16 +39,20 @@
 
 ## 环境
 
+用 uv 管理：Python 3.12（uv 自带解释器），依赖在 `pyproject.toml`，锁定在 `uv.lock`（torch 2.7.1+cu118 来自 PyTorch cu118 源；lerobot 0.6.1 含 smolvla/dataset/feetech；mujoco 3.8.1；numpy 2.2.6）。
+
 ```bash
-export PYTHONPATH=$PWD MUJOCO_GL=egl SO101_NEXUS_SOURCE=/home/loser/Study/so101-nexus   # Nexus @ 7bdb671
-PY=.venv/bin/python   # torch 2.7.1+cu118, lerobot 0.6.1, mujoco 3.8.1, numpy 2.2.6
-$PY -m so101vla.generate_data --config configs/so101_scripted_data_v2.json
-$PY -m so101vla.train --config configs/so101_scripted_full_v2.json --stage prepare
-$PY -m so101vla.scripted --config configs/so101_scripted_full_v2.json --model-dir <checkpoint> --output runs/eval_x --execute 10 --stop-on-success
+uv sync   # 按 uv.lock 建立/更新 .venv
+export MUJOCO_GL=egl SO101_NEXUS_SOURCE=/home/loser/Study/so101-nexus   # Nexus @ 7bdb671，从源码导入，不安装
+uv run python -m so101vla.generate_data --config configs/so101_scripted_data_v2.json
+uv run python -m so101vla.train --config configs/so101_scripted_full_v2.json --stage prepare
+uv run python -m so101vla.scripted --config configs/so101_scripted_full_v2.json --model-dir <checkpoint> --output runs/eval_x --execute 10 --stop-on-success
 ```
+
+加依赖用 `uv add <包>`（会同时更新 `pyproject.toml` 与 `uv.lock`）。LeRobot 命令（`lerobot-find-port`、`lerobot-calibrate`、`lerobot-teleoperate`、`lerobot-record`、`lerobot-train` 等）用 `uv run lerobot-...` 调用，不另建 LeRobot 环境。
+
+系统 FFmpeg 为 9.x，torchcodec 0.11 只支持 FFmpeg 4–8、加载失败，LeRobot 自动退回 pyav 解码（录制编码本来就用 pyav），功能正常，仅解码较慢；2026-10-21 实测本地 `svla_so100_pickplace` 经 pyav 正常读取。RKNN-Toolkit2 等与上面版本冲突的工具链将来单独建环境。
 
 仿真预研的模型与数据已删除（2026-10-19），`runs/so101_*`、`runs/so100_*` 只保留文本结果，见 [docs/prestudy-sim/so101-artifacts.md](docs/prestudy-sim/so101-artifacts.md)。
 
 基础模型 `artifacts/smolvla_base`（`lerobot/smolvla_base`）与 VLM 资源 `artifacts/transfer/smolvlm2_assets` 需放在 `artifacts/` 下。
-
-`.venv` 由 QVLA 的 `.venv-haq-local` 移来，其中 libero 包的 assets 软链接已失效（本项目不用 libero）。
