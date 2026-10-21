@@ -58,16 +58,24 @@ fish scripts/record.fish -n so101_key_pilot -t "Put the key in the white box." -
 fish scripts/record.fish -n so101_key_pilot -t "Put the key in the white box." -e 10 -s 40 --resume
 ```
 
-脚本每次自己 `source scripts/so101_env.fish`，串口/相机缺失或 `$CAMERAS` 为空时拒绝启动；目录已存在而没加 `--resume` 时拒绝（不会覆盖）；固定 `--dataset.push_to_hub=false`、`--display_data=true`，数据存 `artifacts/datasets/<name>`；录完检查数据集是否含 `observation.images.top` 与 `observation.images.wrist`，缺了会打印 WARNING 并以非 0 退出。参数：`-n` 数据集名，`-t` 任务描述，`-e` 段数（默认 5），`-s` 每段秒数（默认 40），`-r` 复位秒数（默认 15）。
+脚本每次自己 `source scripts/so101_env.fish`，串口/相机缺失或 `$CAMERAS` 为空时拒绝启动；目录已存在而没加 `--resume` 时拒绝（不会覆盖）；固定 `--dataset.push_to_hub=false`、`--display_data=true`，数据存 `artifacts/datasets/<name>`；录完检查数据集是否含 `observation.images.top` 与 `observation.images.wrist`，缺了会打印 WARNING 并以非 0 退出。参数：`-n` 数据集名，`-t` 任务描述，`-e` 段数（默认 5），`-s` 每段秒数（默认 40），`-r` 复位上限秒数（默认 600，即一直等到按 `n`），`--dry-run` 只打印完整命令不运行。视频边录边编码（`--dataset.streaming_encoding=true --dataset.encoder_threads=2`；离线以真实画面 30 Hz 送 900 帧/路测试：两路各编出 900 帧、无丢帧，收尾 0.16 s），保存一段不到 1 秒。
 
 - `-t` 写实际做的事（训练时作为语言指令）；同一数据集续录时 `-t` 保持一致。不同任务用不同数据集名。
 - 按键（焦点在运行脚本的终端；Wayland 下读终端按键）：`→`/`n` 提前结束本段，`←`/`r` 重录本段，`Esc`/`q` 停止（已录完的段会保存）。
-- 流程：连上机械臂后**立即**开始第一段（不等 rerun 窗口），终端打印/语音播报 `Recording episode N` 时开始操作 → 本段到时或按 `n` 结束 → 复位阶段（`Reset the environment`，不录，但可遥操作复位；按 `n` 跳过剩余复位时间）→ 自动保存本段（编码视频，约十几秒）→ 自动开始下一段。语音需 `speech-dispatcher`、`espeak-ng`（已装）。
+- 流程（每段）：
+
+  | 步骤 | 听到 | 做什么 | 按键 |
+  |---|---|---|---|
+  | 录制 | `Recording episode N` | 抓钥匙 → 放进盒子 → 机械臂回起始姿态 | 做完按 `n`；失败按 `r` |
+  | 复位 | `Reset the environment` | 用手把物体换位置摆好（不录，从臂仍可遥操作） | 摆好按 `n`（不按会一直等，上限 `-r` 秒） |
+  | 保存 | — | 边录边编码，不到 1 秒 | 不按 |
+
+  连上机械臂后**立即**开始第一段（不等 rerun 窗口）。录满 `-e` 段后自动保存退出，最后一段之后没有复位阶段。语音需 `speech-dispatcher`、`espeak-ng`（已装）。
+- 失败时机：录制中按 `r` → 进入复位，摆好按 `n` 重录同一段（推荐）。复位阶段才按 `r` → 立即结束复位并**马上**重录，所以要先摆好再按。
 - 怎么结束：
-  - 当前段失败 → 按 `r`，本段丢弃、复位后重录。
   - 当前段要保留并结束 → 按 `q`：**`q` 会保存当前这一段**（不论成败）。
   - 当前段不要并结束 → 在录制阶段按 Ctrl+C（当前段未保存即丢弃，之前的段不受影响）。
-  - **不要在保存阶段按 Ctrl+C**（复位结束后编码视频时）：会留下残缺的一段（`data/chunk-*/file-NNN.parquet` 已写而 `meta/episodes` 没记录，另有 `tmp*/` 目录）。2026-10-21 `so101_key_pilot` 第 4 段即如此，已删除残留文件（该 parquet 与 `tmp*/`），之后用 LeRobotDataset 加载确认 4 段、3821 帧。
+  - **不要在保存阶段按 Ctrl+C**（复位结束后保存时；开启边录边编码后这一步不到 1 秒）：会留下残缺的一段（`data/chunk-*/file-NNN.parquet` 已写而 `meta/episodes` 没记录，另有 `tmp*/` 目录）。2026-10-21 `so101_key_pilot` 第 4 段即如此，已删除残留文件（该 parquet 与 `tmp*/`），之后用 LeRobotDataset 加载确认 4 段、3821 帧。
 - 续录时 LeRobot 会检查相机、fps、特征与已有数据一致（`sanity_check_dataset_robot_compatibility`），相机配置不要改。
 - 直接用 `lerobot-record` 时：先 `source scripts/so101_env.fish` 并 `echo $CAMERAS` 确认非空——`--robot.cameras=` 为空时 LeRobot 不报错，会录成没有图像的数据集；一定带 `--dataset.push_to_hub=false`。参数写法见 `scripts/record.fish`。
 - 2026-10-21 前两次试录（`so101_pickplace_pilot` 2 段、`so101_key_pilot` 1 段）都因终端里的 `$CAMERAS` 为空（`CAMERAS` 加入 env 文件后没重新 `source`）而没有图像，已删除；之后改用 `scripts/record.fish`。

@@ -1,20 +1,23 @@
 #!/usr/bin/env fish
 # Record SO-101 teleoperation demos with both cameras, refusing to start if any device/camera config is missing.
 #
-#   fish scripts/record.fish -n so101_key_pilot -t "Put the key in the white box." [-e 5] [-s 40] [-r 15] [--resume]
+#   fish scripts/record.fish -n so101_key_pilot -t "Put the key in the white box." [-e 5] [-s 40] [-r 600] [--resume] [--dry-run]
 #
 # Always sources scripts/so101_env.fish itself (so a stale shell cannot drop the cameras), records into
 # artifacts/datasets/<name> without pushing to the Hub, and checks afterwards that the dataset has both image streams.
+# The reset phase defaults to 600 s, i.e. it effectively waits until `n` is pressed; videos are encoded while recording
+# (streaming encoding, 2 threads; checked offline to keep up with top 1280x720 + wrist 640x480 at 30 Hz without
+# dropping frames), so saving an episode takes well under a second.
 
-argparse 'n/name=' 't/task=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'resume' 'h/help' -- $argv
+argparse 'n/name=' 't/task=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'resume' 'dry-run' 'h/help' -- $argv
 or return 1
 if set -q _flag_help; or not set -q _flag_name; or not set -q _flag_task
-    echo 'usage: fish scripts/record.fish -n <dataset_name> -t "<task text>" [-e episodes=5] [-s episode_s=40] [-r reset_s=15] [--resume]'
+    echo 'usage: fish scripts/record.fish -n <dataset_name> -t "<task text>" [-e episodes=5] [-s episode_s=40] [-r reset_s=600] [--resume] [--dry-run]'
     return 1
 end
 set -q _flag_episodes; or set _flag_episodes 5
 set -q _flag_episode_time; or set _flag_episode_time 40
-set -q _flag_reset_time; or set _flag_reset_time 15
+set -q _flag_reset_time; or set _flag_reset_time 600
 
 cd (status dirname)/..
 source scripts/so101_env.fish
@@ -42,16 +45,23 @@ else if test -e $root
     return 1
 end
 
-echo "dataset: $root  task: \"$_flag_task\"  episodes: $_flag_episodes x $_flag_episode_time s (reset $_flag_reset_time s)"
-echo "cameras: top=$TOP (1280x720) wrist=$WRIST (640x480)"
-uv run --frozen lerobot-record \
+set cmd uv run --frozen lerobot-record \
     --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower --robot.cameras=$CAMERAS \
     --teleop.type=so101_leader --teleop.port=$LEADER --teleop.id=leader \
     --display_data=true \
     --dataset.repo_id=local/$_flag_name --dataset.root=$root \
     --dataset.single_task="$_flag_task" \
     --dataset.num_episodes=$_flag_episodes --dataset.episode_time_s=$_flag_episode_time --dataset.reset_time_s=$_flag_reset_time \
+    --dataset.streaming_encoding=true --dataset.encoder_threads=2 \
     --dataset.push_to_hub=false $extra
+
+echo "dataset: $root  task: \"$_flag_task\"  episodes: $_flag_episodes x $_flag_episode_time s (reset up to $_flag_reset_time s, press n when set)"
+echo "cameras: top=$TOP (1280x720) wrist=$WRIST (640x480)"
+if set -q _flag_dry_run
+    printf '%s\n' $cmd
+    return 0
+end
+$cmd
 set rc $status
 
 if test -f $root/meta/info.json
