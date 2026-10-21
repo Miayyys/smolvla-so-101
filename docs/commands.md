@@ -63,9 +63,9 @@ lerobot-record \
 ```
 
 - 每个新数据集换 `repo_id`/`root` 名字；`single_task` 写实际做的事（训练时作为语言指令）；`episode_time_s` 按任务长短设。
-- 已有数据集：`so101_pickplace_pilot`（2026-10-21，2 段，玩偶与钥匙放两个盒子，**无相机图像**，任务描述误写为 cube/box，仅可回放关节动作）。
 - 按键（焦点在运行 lerobot 的终端；Wayland 下读终端按键）：`→`/`n` 提前结束本段，`←`/`r` 重录本段，`Esc`/`q` 停止。
-- `--dataset.root` 目录不能事先存在；在已有数据集后继续录加 `--resume=true`（其他参数保持一致）。
+- 分多次录同一个数据集：第一次照上面运行（`--dataset.root` 目录不能事先存在）；之后每次用**同一条命令末尾加 `--resume=true`**，新段追加到同一数据集，`--dataset.num_episodes` 是本次要新录的段数。续录时 LeRobot 会检查相机、fps、特征与已有数据一致（`sanity_check_dataset_robot_compatibility`），所以相机配置、`repo_id`、`root` 都不要改。不同任务用不同数据集名。
+- 2026-10-21 第一次试录（`so101_pickplace_pilot`，2 段）因 `$CAMERAS` 为空没有图像，已删除。
 - 一定带 `--dataset.push_to_hub=false`（默认会上传 HuggingFace）。数据放 `artifacts/datasets/`（Git 忽略）。
 - 录之前 `echo $CAMERAS` 确认非空：`--robot.cameras=` 为空时 LeRobot 不报错，会录成没有图像的数据集（2026-10-21 第一次试录即因此没有相机）。`scripts/so101_env.fish` 改过后要重新 `source`。
 - 录完可检查：`python -c "import json; print(list(json.load(open('<root>/meta/info.json'))['features']))"` 应包含 `observation.images.top` 和 `observation.images.wrist`。
