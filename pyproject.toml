@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.13"
 # Versions match the environment the simulation pre-study ran in (torch 2.7.1+cu118, lerobot 0.6.1, mujoco 3.8.1).
 # SO101-Nexus is not installed; it is imported from source via SO101_NEXUS_SOURCE / PYTHONPATH (see README).
 dependencies = [
-    "lerobot[smolvla,dataset,feetech]==0.6.1",
+    "lerobot[smolvla,dataset,feetech,viz]==0.6.1",
     "torch==2.7.1",
     "torchvision==0.22.1",
     "numpy==2.2.6",
