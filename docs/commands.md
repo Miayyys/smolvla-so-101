@@ -64,6 +64,8 @@ lerobot-record \
 - 按键（焦点在运行 lerobot 的终端；Wayland 下读终端按键）：`→`/`n` 提前结束本段，`←`/`r` 重录本段，`Esc`/`q` 停止。
 - `--dataset.root` 目录不能事先存在；在已有数据集后继续录加 `--resume=true`（其他参数保持一致）。
 - 一定带 `--dataset.push_to_hub=false`（默认会上传 HuggingFace）。数据放 `artifacts/datasets/`（Git 忽略）。
+- 录之前 `echo $CAMERAS` 确认非空：`--robot.cameras=` 为空时 LeRobot 不报错，会录成没有图像的数据集（2026-10-21 第一次试录即因此没有相机）。`scripts/so101_env.fish` 改过后要重新 `source`。
+- 录完可检查：`python -c "import json; print(list(json.load(open('<root>/meta/info.json'))['features']))"` 应包含 `observation.images.top` 和 `observation.images.wrist`。
 - 录制要点：主臂和人手不进顶视画面；固定光照（拉窗帘、开灯）；每段同一起始姿态；物体位置在工作区内分散；失败或犹豫的段按 `r` 重录。
 
 ## 6. 查看与回放数据
