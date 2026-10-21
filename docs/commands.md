@@ -80,6 +80,12 @@ lerobot-replay --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=fol
 
 换数据集时把 `repo_id`、`root` 换成对应名字，`episode`/`episode-index` 从 0 开始。
 
+检查数据质量（每段时长、时间戳、视频帧数、运动中的重复帧比例、关节/动作范围；`--sheet` 存每段首/中/末帧拼图）：
+
+```fish
+uv run python scripts/check_dataset.py artifacts/datasets/so101_key_pilot --sheet /tmp/key_pilot_sheet.jpg
+```
+
 ## 7. 训练与评测
 
 真机数据的训练配置待定（基于 `so101vla/train.py`，prepare 阶段读取 LeRobot 数据集）；写好后补充到这里。
