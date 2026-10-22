@@ -48,6 +48,11 @@ def prepare(cfg, out):
     Every episode's frames are decoded from its own video file segment (``from_timestamp`` in the episode
     metadata) and checked frame by frame against the table timestamps; a few rows are compared with LeRobot's
     own reader. Normalization statistics use training episodes only.
+
+    With ``trim_static_tail`` = {tolerance_deg, keep_frames}, each episode's trailing frames in which every joint
+    stays within ``tolerance_deg`` of the final state are cut down to ``keep_frames``: the cut frames are cached
+    but never sampled, never enter the statistics, and action chunks are padded after the kept end. Without
+    ``task`` in the config, each frame's language instruction is its own task from ``meta/tasks.parquet``.
     """
     import av
     import pandas as pd
@@ -67,21 +72,35 @@ def prepare(cfg, out):
     eps = table['episode_index'].to_numpy()
     if not set(eps) == set(splits['train']) | set(splits['validation']) | set(splits['test']):
         raise ValueError('Partition does not cover exactly the dataset episodes')
-    train = np.isin(eps, splits['train'])
-    train_rows = np.flatnonzero(train)
     states = np.stack(table['observation.state'].to_numpy()).astype('float32')
     actions = np.stack(table['action'].to_numpy()).astype('float32')
     timestamps = table['timestamp'].to_numpy(dtype='float64')
-    stats = {key: {'mean': a[train].mean(0).tolist(), 'std': np.maximum(a[train].std(0), 1e-6).tolist()}
-             for key, a in [('observation.state', states), ('action', actions)]}
+    tasks = pd.read_parquet(root / 'meta/tasks.parquet')
+    task_names = np.empty(len(tasks), dtype=object)
+    task_names[tasks['task_index'].to_numpy()] = tasks.index.to_numpy()
+    task_index = table['task_index'].to_numpy(dtype='int64')
+    trim = cfg.get('trim_static_tail')
+    kept = np.ones(len(eps), dtype=bool)
     end_rows = np.empty(len(eps), dtype='int64')
-    validation_rows = []
+    validation_rows = []; trimmed = {}
     for ep in sorted(set(eps.tolist())):
         rows = np.flatnonzero(eps == ep)
         assert np.array_equal(rows, np.arange(rows[0], rows[-1] + 1))
-        end_rows[rows] = rows[-1]
+        end = rows[-1]
+        if trim:
+            still = (np.abs(states[rows] - states[rows[-1]]) <= trim['tolerance_deg']).all(1)
+            first = len(rows)
+            while first > 0 and still[first - 1]: first -= 1
+            end = min(rows[-1], rows[0] + first + trim['keep_frames'] - 1)
+            kept[end + 1:rows[-1] + 1] = False
+            trimmed[int(ep)] = int(rows[-1] - end)
+        end_rows[rows] = end
         if ep in splits['validation']:
-            validation_rows.extend(np.linspace(rows[0], max(rows[0], rows[-1] - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
+            validation_rows.extend(np.linspace(rows[0], max(rows[0], end - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
+    train = np.isin(eps, splits['train']) & kept
+    train_rows = np.flatnonzero(train)
+    stats = {key: {'mean': a[train].mean(0).tolist(), 'std': np.maximum(a[train].std(0), 1e-6).tolist()}
+             for key, a in [('observation.state', states), ('action', actions)]}
     episodes = pd.concat([pd.read_parquet(p) for p in sorted((root / 'meta/episodes').rglob('*.parquet'))]).set_index('episode_index')
 
     selected_checks = [0, len(eps) // 2, len(eps) - 1]
@@ -143,11 +162,13 @@ def prepare(cfg, out):
                 image = np.asarray(Image.open(io.BytesIO(stream.read(int(caches[video_key]['lengths'][row])))).convert('RGB'))
                 rgb_errors[video_key].append(float(np.abs(image.astype('float32') - official).mean()))
     np.savez(out / 'data.npz', states=states, actions=actions, episodes=eps, end_rows=end_rows,
-             train_rows=train_rows, validation_rows=validation_rows,
+             train_rows=train_rows, validation_rows=validation_rows, task_index=task_index, task_names=task_names.astype(str),
              **{f'{k.split(".")[-1]}_{name}': c[name] for k, c in caches.items() for name in ('offsets', 'lengths')})
     (out / 'stats.json').write_text(json.dumps(stats, indent=2) + '\n')
     manifest = {'config': cfg, 'splits': splits, 'frames': len(eps), 'train_frames': len(train_rows),
-                'validation_rows': validation_rows,
+                'validation_rows': validation_rows, 'tasks': task_names.tolist(),
+                'train_frames_by_task': {task_names[i]: int((task_index[train_rows] == i).sum()) for i in range(len(task_names))},
+                'trimmed_tail_frames': trimmed, 'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept).sum()),
                 'data_sha256': {str(p.relative_to(root)): sha(p) for p in data_files},
                 'partition_sha256': sha(cfg['partition']),
                 'caches': {k: {'sha256': c['sha256'], 'bytes': c['bytes']} for k, c in caches.items()},
@@ -156,6 +177,7 @@ def prepare(cfg, out):
                 'stats_sha256': sha(out / 'stats.json')}
     (out / 'prepared.json').write_text(json.dumps(manifest, indent=2) + '\n')
     emit(out, {'stage': 'prepared', 'train_frames': len(train_rows), 'validation_rows': len(validation_rows),
+               'trimmed_train_frames': manifest['trimmed_train_frames'], 'train_frames_by_task': manifest['train_frames_by_task'],
                'cache_bytes': {k: c['bytes'] for k, c in caches.items()}, 'max_timestamp_error_s': max_alignment_error})
 
 
@@ -164,7 +186,8 @@ class Frames:
         self.data = {k: v for k, v in np.load(out / 'data.npz').items()}
         self.camera_map = camera_map(cfg)
         self.streams = {key: (out / cache_name(video_key)).open('rb') for key, video_key in self.camera_map.items()}
-        self.task = cfg['task']
+        # A fixed config task (experiment 1) or each frame's own dataset task.
+        self.task = cfg.get('task')
 
     def batch(self, rows):
         import torch
@@ -182,7 +205,8 @@ class Frames:
         return {**{key: torch.stack(v).float() / 255 for key, v in images.items()},
                 'observation.state': torch.from_numpy(self.data['states'][rows].copy()),
                 'action': torch.from_numpy(np.stack(actions)),
-                'action_is_pad': torch.from_numpy(np.stack(masks)), 'task': [self.task] * len(rows)}
+                'action_is_pad': torch.from_numpy(np.stack(masks)),
+                'task': [self.task or str(self.data['task_names'][self.data['task_index'][row]]) for row in rows]}
 
 
 def train(cfg, out, smoke, resume=False, stop_step=None):
@@ -260,7 +284,7 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
 
     def evaluate(step):
         old_rng = torch.get_rng_state(); old_cuda_rng = torch.cuda.get_rng_state()
-        joint_errors = []; planner_rows = []
+        joint_errors = []; planner_rows = []; row_tasks = []
         policy.eval()
         try:
             for row in frames.data['validation_rows']:
@@ -283,12 +307,16 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
                         prediction = post(policy.predict_action_chunk(batch)).float().cpu().numpy()[0]
                     finally:
                         if goal_cfg: so101_goal.set_goal(policy, None)
-                joint_errors.append(np.abs(prediction[mask] - target[mask]))
+                joint_errors.append(np.abs(prediction[mask] - target[mask])); row_tasks.append(raw['task'][0])
             mae = np.concatenate(joint_errors).mean(0)
             normalized = float(np.mean(mae / np.asarray(stats['action']['std'])))
             result = {'stage': 'validation', 'step': step, 'normalized_action_mae': normalized,
                       'per_joint_mae': mae.tolist(), 'units': 'degrees for 5 arm joints; gripper percentage points',
                       'observations': len(joint_errors), 'scope': 'offline held-out demonstrations; not task success'}
+            if len(set(row_tasks)) > 1:
+                result['per_task_normalized_action_mae'] = {
+                    t: float(np.mean(np.concatenate([e for e, r in zip(joint_errors, row_tasks) if r == t]).mean(0) / np.asarray(stats['action']['std'])))
+                    for t in sorted(set(row_tasks))}
             if goal_cfg:
                 merged = {k: np.concatenate([r[k] for r in planner_rows]) for k in planner_rows[0]}
                 result['action_condition'] = 'recorded goal, no noise, no null'

@@ -25,7 +25,11 @@
 | 50–74 | 玩偶 + 空白盒 + 装着钥匙的另一个白盒 |
 | 75–99 | 玩偶 + 两个空白盒 + 桌上散放的钥匙；玩偶放进其中一个，另一个留空 |
 
-- 第 75–99 段有两个空白盒，任务文本只说 "the white box"，从文本和画面无法确定该放哪个盒子（放哪个的规则未记录）。
+- 第 75–99 段有两个空白盒，任务文本只说 "the white box"；用户确认放进任一个都算成功。
 - 每段末尾停在起始姿态的静止尾段平均 2.9 s（2.0–4.6 s），占 19% 的帧。
 - 起始姿态比钥匙数据一致：腕部旋转起始角标准差 6.7°（钥匙数据 32.6°）。
-- 两个数据集都没有夜间光照的示教；实验一是晚上测的。
+- 光照（用户）：玩偶数据的光照与晚上测试时接近；之前白天录的钥匙数据有点过曝。
+
+## so101_pilot_v2 — 两个任务合并（2026-10-22）
+
+`lerobot-edit-dataset --new_repo_id local/so101_pilot_v2 --new_root artifacts/datasets/so101_pilot_v2 --operation.type merge --operation.repo_ids '["local/so101_key_pilot", "local/so101_doll_pilot"]' --operation.roots '[...两个 root...]' --operation.concatenate_videos false --operation.concatenate_data false`。共 198 段、104171 帧：钥匙为第 0–97 段（task_index 0），玩偶为第 98–197 段（task_index 1）。已核对状态、动作、时间戳、frame_index 与源数据逐行相同，抽查两路视频帧逐像素相同。用于[实验二](experiments/exp2-pilot-v2.md)。
