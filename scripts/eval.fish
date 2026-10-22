@@ -9,7 +9,8 @@
 # Keys as in record.fish: n ends the episode / reset early, r re-runs the episode, q stops (finished episodes are saved).
 # The policy was trained with top -> camera1 and wrist -> camera2, hence the rename map.
 # Default inference is sync: the arm waits ~0.18 s for each new 50-step chunk. --rtc uses LeRobot's Real-Time Chunking:
-# a background thread replans once 30 actions are left and guides the new chunk to match the next 10 old actions.
+# a background thread replans once 30 actions are left and guides the new chunk to match the next 20 old actions
+# (horizon 20 > the ~11-step real inference delay, so the first executed actions are still blended).
 
 argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'rtc' 'resume' 'dry-run' 'h/help' -- $argv
 or return 1
@@ -58,7 +59,7 @@ end
 
 set inference --inference.type=sync
 set mode sync
-set -q _flag_rtc; and set mode rtc; and set inference --inference.type=rtc --inference.rtc.execution_horizon=10 --inference.rtc.max_guidance_weight=10.0 --inference.queue_threshold=30
+set -q _flag_rtc; and set mode rtc; and set inference --inference.type=rtc --inference.rtc.execution_horizon=20 --inference.rtc.max_guidance_weight=10.0 --inference.queue_threshold=30
 
 set cmd uv run --frozen lerobot-rollout \
     --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower --robot.cameras=$CAMERAS \
