@@ -2,17 +2,19 @@
 # Run a trained policy on the real SO-101 for a few episodes (lerobot-rollout, episodic strategy), record the rollouts,
 # then ask for the success of each new episode and append it to runs/real_eval/<name>.csv.
 #
-#   fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." [-p runs/so101_key_v1/best] [-e 10] [-s 40] [-r 600] [--resume] [--dry-run]
+#   fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." [-p runs/so101_key_v1/best] [-e 10] [-s 40] [-r 600] [--rtc] [--resume] [--dry-run]
 #
 # No leader arm: between episodes the follower returns (1 s) to the pose it had when the script started and holds it
 # while you rearrange the objects, so start with the arm in the same rest pose used when recording demos.
 # Keys as in record.fish: n ends the episode / reset early, r re-runs the episode, q stops (finished episodes are saved).
 # The policy was trained with top -> camera1 and wrist -> camera2, hence the rename map.
+# Default inference is sync: the arm waits ~0.18 s for each new 50-step chunk. --rtc uses LeRobot's Real-Time Chunking:
+# a background thread replans once 30 actions are left and guides the new chunk to match the next 10 old actions.
 
-argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'resume' 'dry-run' 'h/help' -- $argv
+argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'rtc' 'resume' 'dry-run' 'h/help' -- $argv
 or return 1
 if set -q _flag_help; or not set -q _flag_name; or not set -q _flag_task
-    echo 'usage: fish scripts/eval.fish -n rollout_<name> -t "<task text>" [-p policy_dir=runs/so101_key_v1/best] [-e episodes=10] [-s episode_s=40] [-r reset_s=600] [--resume] [--dry-run]'
+    echo 'usage: fish scripts/eval.fish -n rollout_<name> -t "<task text>" [-p policy_dir=runs/so101_key_v1/best] [-e episodes=10] [-s episode_s=40] [-r reset_s=600] [--rtc] [--resume] [--dry-run]'
     return 1
 end
 set -q _flag_policy; or set _flag_policy runs/so101_key_v1/best
@@ -54,11 +56,15 @@ else if test -e $root
     return 1
 end
 
+set inference --inference.type=sync
+set mode sync
+set -q _flag_rtc; and set mode rtc; and set inference --inference.type=rtc --inference.rtc.execution_horizon=10 --inference.rtc.max_guidance_weight=10.0 --inference.queue_threshold=30
+
 set cmd uv run --frozen lerobot-rollout \
     --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower --robot.cameras=$CAMERAS \
     --policy.path=$_flag_policy \
     --rename_map='{"observation.images.top": "observation.images.camera1", "observation.images.wrist": "observation.images.camera2"}' \
-    --strategy.type=episodic --inference.type=sync \
+    --strategy.type=episodic $inference \
     --task="$_flag_task" --display_data=true \
     --dataset.repo_id=local/$_flag_name --dataset.root=$root --dataset.no_stamp=true \
     --dataset.single_task="$_flag_task" \
@@ -66,7 +72,7 @@ set cmd uv run --frozen lerobot-rollout \
     --dataset.streaming_encoding=true --dataset.encoder_threads=2 \
     --dataset.push_to_hub=false $extra
 
-echo "policy: $_flag_policy  dataset: $root  task: \"$_flag_task\"  episodes: $_flag_episodes x $_flag_episode_time s"
+echo "policy: $_flag_policy  dataset: $root  task: \"$_flag_task\"  episodes: $_flag_episodes x $_flag_episode_time s  inference: $mode"
 if set -q _flag_dry_run
     printf '%s\n' $cmd
     return 0
@@ -89,7 +95,7 @@ for ep in (seq $before (math $after - 1))
         contains -- $answer y n s; and break
     end
     test $answer = s; and continue
-    echo "$ep,"(test $answer = y; and echo 1; or echo 0)",$_flag_policy,$_flag_task,"(date -Iseconds)"," >>$csv
+    echo "$ep,"(test $answer = y; and echo 1; or echo 0)",$_flag_policy,$_flag_task,"(date -Iseconds)",$mode" >>$csv
 end
 uv run --frozen python -c "
 import csv, sys
