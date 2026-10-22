@@ -125,6 +125,8 @@ uv run python -m so101vla.train --config configs/so101_key_v1.json --stage train
 tail -f runs/so101_key_v1/train.log                                                  # validation 行是验证误差
 ```
 
+8 GB 显存很紧（训练约 7 GB）：浏览器、VS Code 也会占几百 MB 显存，训练启动报 `CUDA out of memory` 时，在命令前加 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`（fish 写作 `env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run ...`），或关掉这些程序。torch.compile 在本机不提速，见[实验二](experiments/exp2-pilot-v2.md)。
+
 真机测试（`scripts/eval.fish`，不需要先 `uv activate`/`source`）：
 
 ```fish
