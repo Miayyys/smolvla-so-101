@@ -125,7 +125,7 @@ uv run python -m so101vla.train --config configs/so101_key_v1.json --stage train
 tail -f runs/so101_key_v1/train.log                                                  # validation 行是验证误差
 ```
 
-8 GB 显存很紧（训练约 7 GB）：浏览器、VS Code 也会占几百 MB 显存，训练启动报 `CUDA out of memory` 时，在命令前加 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`（fish 写作 `env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run ...`），或关掉这些程序。torch.compile 在本机不提速，见[实验二](experiments/exp2-pilot-v2.md)。
+8 GB 显存很紧（训练约 7 GB）：浏览器、VS Code 也会占几百 MB 显存，训练启动报 `CUDA out of memory` 时，在命令前加 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`（fish 写作 `env PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True uv run ...`），或关掉这些程序。torch.compile 在本机不提速，见 [notes/training-speed.md](notes/training-speed.md)。
 
 真机测试（`scripts/eval.fish`，不需要先 `uv activate`/`source`）：
 
@@ -138,7 +138,7 @@ fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box."
 
 - 不接主臂：脚本启动时从臂所处姿态就是"起始姿态"，每段结束后从臂 1 秒内回到该姿态并保持。所以**启动前把从臂摆到录示教时的起始姿态**。
 - 流程（每段）：听到 `Recording episode N` → 模型控制从臂（首次推理约 0.6 s，之后每 50 步/1.7 s 停顿约 0.17 s 推理）→ 成功或明显失败后按 `n` → 从臂回起始姿态 → 摆好物体按 `n` 开始下一段。`r` 重测本段（该段不保存），`q` 停止。
-- 异步推理加 `--rtc`（LeRobot Real-Time Chunking）：后台线程在队列剩 30 步时就生成下一块，并引导新块前 20 步与旧块衔接（实测推理延迟约 11 步，视野要大于它）。偶尔出现 `Indexes diff is not equal to real delay` 警告不要紧：意思是推理耗时折算的步数比实际执行的多 1 步，新块开头会多丢 1 步，机械臂不再每 1.7 s 停一下。离线检查见[实验二](experiments/exp2-pilot-v2.md)，真机效果未测量。CSV 的 note 列记录 `sync`/`rtc`。同步与 RTC 的结果用不同的评测名分开，例如 `rollout_pilot_v2_s6500_doll_rtc`。
+- 异步推理加 `--rtc`（LeRobot Real-Time Chunking）：后台线程在队列剩 30 步时就生成下一块，并引导新块前 20 步与旧块衔接（实测推理延迟约 11 步，视野要大于它）。偶尔出现 `Indexes diff is not equal to real delay` 警告不要紧：意思是推理耗时折算的步数比实际执行的多 1 步，新块开头会多丢 1 步，机械臂不再每 1.7 s 停一下。离线检查和第 6500 步模型的真机对比见 [notes/inference-sync-vs-rtc.md](notes/inference-sync-vs-rtc.md)（视野 10 已测；视野 20 的真机效果未测量）。CSV 的 note 列记录 `sync`/`rtc`。同步与 RTC 的结果用不同的评测名分开，例如 `rollout_pilot_v2_s6500_doll_rtc`。
 - **安全**：第一次手放在电源旁；从臂乱动、顶桌面或卡住时立刻按 `q`，或 Ctrl+C，或断电。
 - 结束后脚本逐段问是否成功（`y`/`n`/`s` 跳过不计），追加到 `runs/real_eval/<name>.csv` 并打印成功率；评测录像存在 `artifacts/datasets/<name>`，可用 §6 的 `lerobot-dataset-viz` 回看。
 - 训练用的任务文本、相机配置要与录制一致；物体摆放用训练中出现过的范围，另行记录摆放位置。
