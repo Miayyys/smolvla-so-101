@@ -1,15 +1,16 @@
 #!/usr/bin/env fish
 # Run a trained policy on the real SO-101 once, without recording anything (lerobot-rollout, base strategy).
 #
-#   fish scripts/try.fish -t "Put the doll in the white box." [-p runs/so101_pilot_v2/best] [-s 40] [--smooth sigma] [--rtc] [--dry-run]
+#   fish scripts/try.fish -t "Put the doll in the white box." [-p runs/so101_pilot_v2/best] [-s 40] [--smooth sigma=2, 0 = off] [--rtc] [--dry-run]
 #
 # The follower starts from the pose it has when the script starts; after -s seconds (0 = until Ctrl+C) or on Ctrl+C
-# it returns there and the script exits. Nothing is saved: no dataset, no CSV. Inference settings match eval.fish.
+# it returns there and the script exits. Nothing is saved: no dataset, no CSV. Inference settings match eval.fish
+# (chunks smoothed with sigma 2 unless --smooth 0).
 
 argparse 't/task=' 'p/policy=' 's/seconds=' 'smooth=' 'rtc' 'dry-run' 'h/help' -- $argv
 or return 1
 if set -q _flag_help; or not set -q _flag_task
-    echo 'usage: fish scripts/try.fish -t "<task text>" [-p policy_dir=runs/so101_pilot_v2/best] [-s seconds=40, 0 = until Ctrl+C] [--smooth sigma] [--rtc] [--dry-run]'
+    echo 'usage: fish scripts/try.fish -t "<task text>" [-p policy_dir=runs/so101_pilot_v2/best] [-s seconds=40, 0 = until Ctrl+C] [--smooth sigma=2, 0 = off] [--rtc] [--dry-run]'
     return 1
 end
 set -q _flag_policy; or set _flag_policy runs/so101_pilot_v2/best
@@ -31,7 +32,7 @@ end
 set inference --inference.type=sync
 set mode sync
 set -q _flag_rtc; and set mode rtc; and set inference --inference.type=rtc --inference.rtc.execution_horizon=20 --inference.rtc.max_guidance_weight=10.0 --inference.queue_threshold=30
-set -q _flag_smooth; or set _flag_smooth 0
+set -q _flag_smooth; or set _flag_smooth 2
 test $_flag_smooth != 0; and set mode $mode+smooth$_flag_smooth
 
 set cmd uv run --frozen python -m so101vla.rollout --smooth_sigma=$_flag_smooth \
