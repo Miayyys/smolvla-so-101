@@ -144,7 +144,8 @@ fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box."
   fish scripts/try.fish -t "Put the doll in the white box." --rtc          # 默认 runs/so101_pilot_v2/best
   fish scripts/try.fish -t "Put the key in the white box." --rtc -s 0      # 一直跑，Ctrl+C 停
   ```
-- 平滑动作（`eval.fish` 和 `try.fish` 自 2026-10-23 起**默认开启**，σ=2；`--smooth 0` 关闭，`--smooth 3` 更平滑）：对模型每次输出的 50 步动作块沿时间做高斯平滑，减少抖动，不加延迟。分析和离线结果见 [notes/action-smoothing.md](notes/action-smoothing.md)；真机试用时明显减少了抖动（用户观察，未定量）。CSV 的 note 列会记成 `rtc+smooth2` 或 `sync+smooth2`。
+- 平滑动作（`eval.fish` 和 `try.fish` 自 2026-10-23 起**默认开启**，σ=2；`--smooth 0` 关闭，`--smooth 3` 更平滑）：对模型每次输出的 50 步动作块沿时间做高斯平滑，减少抖动，不加延迟。分析和离线结果见 [notes/action-smoothing.md](notes/action-smoothing.md)；真机实测：下发动作每秒反转从约 6 次降到约 0.04 次，3 Hz 以上的能量占比从 31–52% 降到约 4%（示教为 3%）。CSV 的 note 列会记成 `rtc+smooth2` 或 `sync+smooth2`。
+  - 量化比较两组录像（反转/秒、≥3 Hz 能量占比、jerk、高频 RMS，逐关节）：`uv run --frozen python scripts/jitter_analysis.py artifacts/datasets/<不平滑> artifacts/datasets/<平滑>`；对比图：`uv run --frozen --with matplotlib python scripts/smoothing_plot.py`（数据集名写在脚本开头）。
 - **安全**：第一次手放在电源旁；从臂乱动、顶桌面或卡住时立刻按 `q`，或 Ctrl+C，或断电。
 - 结束后脚本逐段问是否成功（`y`/`n`/`s` 跳过不计），追加到 `runs/real_eval/<name>.csv` 并打印成功率；评测录像存在 `artifacts/datasets/<name>`，可用 §6 的 `lerobot-dataset-viz` 回看。
 - 训练用的任务文本、相机配置要与录制一致；物体摆放用训练中出现过的范围，另行记录摆放位置。
