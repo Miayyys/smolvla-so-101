@@ -144,7 +144,7 @@ fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box."
   fish scripts/try.fish -t "Put the doll in the white box." --rtc          # 默认 runs/so101_pilot_v2/best
   fish scripts/try.fish -t "Put the key in the white box." --rtc -s 0      # 一直跑，Ctrl+C 停
   ```
-- 平滑动作（`--smooth 2`，`eval.fish` 和 `try.fish` 都支持）：对模型每次输出的 50 步动作块沿时间做高斯平滑（σ=2 步），减少抖动，不加延迟。分析和离线结果见 [notes/action-smoothing.md](notes/action-smoothing.md)，真机效果未测量。例：`fish scripts/try.fish -t "Put the doll in the white box." --rtc --smooth 2`。
+- 平滑动作（`--smooth 2`，`eval.fish` 和 `try.fish` 都支持）：对模型每次输出的 50 步动作块沿时间做高斯平滑（σ=2 步），减少抖动，不加延迟。分析和离线结果见 [notes/action-smoothing.md](notes/action-smoothing.md)；真机试用时明显减少了抖动（用户观察，未定量）。例：`fish scripts/try.fish -t "Put the doll in the white box." --rtc --smooth 2`。
 - **安全**：第一次手放在电源旁；从臂乱动、顶桌面或卡住时立刻按 `q`，或 Ctrl+C，或断电。
 - 结束后脚本逐段问是否成功（`y`/`n`/`s` 跳过不计），追加到 `runs/real_eval/<name>.csv` 并打印成功率；评测录像存在 `artifacts/datasets/<name>`，可用 §6 的 `lerobot-dataset-viz` 回看。
 - 训练用的任务文本、相机配置要与录制一致；物体摆放用训练中出现过的范围，另行记录摆放位置。
