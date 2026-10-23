@@ -3,8 +3,9 @@
   uv run --frozen python scripts/correction_selftest.py [--demo artifacts/datasets/rollout_pilot_v2_final_key_rtc_s2]
 
 1. Runs so101vla.correction's strategy against fake follower/leader/inference engine with scripted key presses
-   (counted in follower observations, so independent of timing): attempt 0 = model, take over, correct, hand back,
-   model, n; attempt 1 = r (discarded); attempt 2 = model, take over, correct, n while correcting. Real LeRobot dataset
+   (counted in follower observations, so independent of timing), time limit 2 s of recorded frames: attempt 0 = model,
+   take over, correct past the limit (must not be cut), hand back, ended by the limit; attempt 1 = r (discarded);
+   attempt 2 = model, take over, correct, n while correcting. Real LeRobot dataset
    writing with the same features and video encoding as the real-arm rollouts (frames are flat gray).
 2. Checks the saved intervention flags, the leader torque sequence (goal = present position at every torque enable)
    and that correction frames record the leader's positions.
@@ -28,7 +29,7 @@ import torch
 
 WORK = Path('artifacts/selftest_correction')
 JOINTS = ['shoulder_pan', 'shoulder_lift', 'elbow_flex', 'wrist_flex', 'wrist_roll', 'gripper']
-KEYS = {(0, 20): 'space', (0, 32): 'tab', (0, 62): 'space', (0, 92): 'n',
+KEYS = {(0, 20): 'space', (0, 32): 'tab', (0, 100): 'space',
         (1, 15): 'r',
         (2, 25): 'space', (2, 37): 'tab', (2, 70): 'n'}
 
@@ -116,7 +117,7 @@ def record():
     follower, leader, engine = Follower(), Leader(), Engine()
     cfg = SimpleNamespace(fps=30, task='selftest', play_sounds=False, use_torch_compile=False, interpolation_multiplier=1,
                           display_data=False, return_to_initial_position=True,
-                          dataset=SimpleNamespace(num_episodes=2, episode_time_s=30, reset_time_s=1.0,
+                          dataset=SimpleNamespace(num_episodes=2, episode_time_s=2.0, reset_time_s=1.0,
                                                   single_task='Put the key in the white box.', push_to_hub=False))
     identity = SimpleNamespace(robot_observation_processor=lambda obs: obs, teleop_action_processor=lambda x: x[0],
                                robot_action_processor=lambda x: x[0])
@@ -158,7 +159,8 @@ def check_recording(root, leader):
     stats = correction.summary(root)
     print('summary', json.dumps(stats))
     assert list(stats) == [0, 1], stats
-    assert stats[0]['corrections'] == 1 and not stats[0]['human_finished'], stats
+    # 19 model frames, a 67-frame correction running past the 60-frame limit, then one model frame and the limit ends it.
+    assert stats[0]['frames'] == 87 and stats[0]['corrections'] == 1 and not stats[0]['human_finished'], stats
     assert stats[1]['corrections'] == 1 and stats[1]['human_finished'], stats
     table = pd.concat(pd.read_parquet(p) for p in sorted((root / 'data').rglob('*.parquet'))).sort_values('index')
     for ep, rows in table.groupby('episode_index'):

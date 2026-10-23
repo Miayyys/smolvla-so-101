@@ -10,7 +10,8 @@ leader arm where it goes wrong and hands back once the current step is done. Eve
          correcting -> paused: both arms hold where they are
   n      end the attempt and save it (also ends the reset phase early);  r  discard and redo it;  q  stop
 
-Paused frames are not recorded, so a correction directly continues the frame sequence. Outside a correction the leader
+Paused frames are not recorded, so a correction directly continues the frame sequence. ``--dataset.episode_time_s``
+limits recorded seconds per attempt (0 = no limit) and never ends an attempt during a correction. Outside a correction the leader
 holds its pose under torque (it never drops when handing back); at the end of an attempt it is driven to the
 follower's startup pose and released, and the follower returns (1 s) to that pose while the scene is reset.
 Differences from LeRobot's ``dagger`` strategy: per-attempt episodes instead of size-based rotation, autonomous and
@@ -155,10 +156,15 @@ def install():
             self._engine.reset()
             self._engine.resume()
             phase, hold = AUTONOMOUS, None
-            start = time.perf_counter()
-            while time.perf_counter() - start < control_time_s:
+            # The limit counts recorded frames only (paused time and the 2 s leader moves are not recorded), 0 = none,
+            # and never cuts a correction short: the operator ends attempts with n.
+            limit, recorded = control_time_s * ctx.runtime.cfg.fps, 0
+            while True:
                 loop_start = time.perf_counter()
                 if self._flags['exit_early'] or ctx.runtime.shutdown_event.is_set():
+                    break
+                if 0 < limit <= recorded and phase != CORRECTING:
+                    logger.info('correction: %.0f s recorded, attempt ended by the time limit', control_time_s)
                     break
                 obs = robot.get_observation()
                 key = self._take_key()
@@ -191,6 +197,7 @@ def install():
                     dataset.add_frame({**build_dataset_frame(features, obs_processed, prefix=OBS_STR),
                                        **build_dataset_frame(features, action, prefix=ACTION),
                                        'task': task, 'intervention': np.array([phase == CORRECTING], dtype=bool)})
+                    recorded += 1
                 dt = time.perf_counter() - loop_start
                 if dt > control_interval:
                     logger.warning('correction: loop at %.1f Hz, below %s Hz', 1 / dt, ctx.runtime.cfg.fps)

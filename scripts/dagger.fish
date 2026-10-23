@@ -4,7 +4,7 @@
 # tagged intervention = True/False; afterwards each new episode is asked for success and appended, with its correction
 # statistics, to runs/dagger/<name>.csv.
 #
-#   fish scripts/dagger.fish -n rollout_dagger_<name> -t "Put the doll in the white box." [-p runs/so101_pilot_v2/best] [-e 10] [-s 60] [-r 600] [--smooth sigma=2, 0 = off] [--rtc] [--resume] [--dry-run]
+#   fish scripts/dagger.fish -n rollout_dagger_<name> -t "Put the doll in the white box." [-p runs/so101_pilot_v2/best] [-e 10] [-s 0] [-r 600] [--smooth sigma=2, 0 = off] [--rtc] [--resume] [--dry-run]
 #
 # Keys (this terminal must stay focused):
 #   space  model -> pause: the policy stops and the leader is driven (2 s) to the follower's pose and holds it;
@@ -15,17 +15,18 @@
 # Rule of thumb: once you take over, finish the current step (e.g. grasp and lift) before handing back; if the model
 # fails at the same spot again in this attempt, finish the attempt yourself and press n.
 # Between attempts the follower returns to its startup pose (start with both arms in the demo rest pose); rearrange
-# the objects, then n. Inference flags as in eval.fish.
+# the objects, then n. Attempts end only with n unless -s sets a limit on recorded seconds (paused time and the 2 s
+# leader moves do not count, and a correction is never cut short). Inference flags as in eval.fish.
 
 argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'smooth=' 'rtc' 'resume' 'dry-run' 'h/help' -- $argv
 or return 1
 if set -q _flag_help; or not set -q _flag_name; or not set -q _flag_task
-    echo 'usage: fish scripts/dagger.fish -n rollout_dagger_<name> -t "<task text>" [-p policy_dir=runs/so101_pilot_v2/best] [-e episodes=10] [-s episode_s=60] [-r reset_s=600] [--smooth sigma=2, 0 = off] [--rtc] [--resume] [--dry-run]'
+    echo 'usage: fish scripts/dagger.fish -n rollout_dagger_<name> -t "<task text>" [-p policy_dir=runs/so101_pilot_v2/best] [-e episodes=10] [-s max recorded s per attempt, 0 = no limit] [-r reset_s=600] [--smooth sigma=2, 0 = off] [--rtc] [--resume] [--dry-run]'
     return 1
 end
 set -q _flag_policy; or set _flag_policy runs/so101_pilot_v2/best
 set -q _flag_episodes; or set _flag_episodes 10
-set -q _flag_episode_time; or set _flag_episode_time 60
+set -q _flag_episode_time; or set _flag_episode_time 0
 set -q _flag_reset_time; or set _flag_reset_time 600
 
 cd (status dirname)/..
@@ -77,7 +78,9 @@ set cmd uv run --frozen python -m so101vla.rollout --smooth_sigma=$_flag_smooth 
     --dataset.streaming_encoding=true --dataset.encoder_threads=2 \
     --dataset.push_to_hub=false $extra
 
-echo "policy: $_flag_policy  dataset: $root  task: \"$_flag_task\"  attempts: $_flag_episodes x $_flag_episode_time s  inference: $mode"
+set limit none
+test $_flag_episode_time != 0; and set limit $_flag_episode_time s
+echo "policy: $_flag_policy  dataset: $root  task: \"$_flag_task\"  attempts: $_flag_episodes, time limit: $limit  inference: $mode"
 if set -q _flag_dry_run
     printf '%s\n' $cmd
     return 0

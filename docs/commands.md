@@ -155,7 +155,7 @@ fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box."
 `scripts/dagger.fish`：模型控制从臂完成一次任务尝试（一段），出错时人用主臂接管纠正，纠正完再交还模型。每帧记录 `intervention`（True = 主臂在控制）。设计与验证见 [notes/correction-collection.md](notes/correction-collection.md)（目前只在假硬件上验证过）。
 
 ```fish
-fish scripts/dagger.fish -n rollout_dagger_doll_r1 -t "Put the doll in the white box." --rtc            # 默认 runs/so101_pilot_v2/best，10 段 × 60 s，平滑 σ=2
+fish scripts/dagger.fish -n rollout_dagger_doll_r1 -t "Put the doll in the white box." --rtc            # 默认 runs/so101_pilot_v2/best，10 段，不限时（按 n 结束），平滑 σ=2
 fish scripts/dagger.fish -n rollout_dagger_doll_r1 -t "Put the doll in the white box." --rtc --resume   # 追加
 ```
 
@@ -166,6 +166,7 @@ fish scripts/dagger.fish -n rollout_dagger_doll_r1 -t "Put the doll in the white
   - 纠正中按 `空格`：交还模型。主臂停在你松手的位置并保持，不会掉下来。纠正中按 `Tab` 则两只臂都保持不动（暂停）。
   - `n` 结束本段并保存。按之前先松开主臂，它会被带回起始姿态后卸力。`r` 重来本段（不保存），`q` 停止。
 - 规则：一旦接管，至少完成当前这一小步（例如夹稳并抬起）再交还。本段里模型在同一个地方又失败时，由人做完本段再按 `n`。暂停期间的帧不记录。
+- 每段默认不限时，只有按 `n` 才结束。`-s 秒数` 可以设上限，但只按实际录下的时长计算（暂停和主臂对齐的时间不算），而且不会在纠正过程中截断。
 - 结束后逐段显示帧数、接管次数、人控帧占比、是否由人做完，并询问成功与否（`y` = 任务完成，有没有人帮忙都算）。结果追加到 `runs/dagger/<name>.csv`，最后打印"完成数 / 无接管完成数 / 总接管次数"。随时可查看统计：`uv run --frozen python -m so101vla.correction artifacts/datasets/<name>`。
 
 合并成训练集（示教 + 纠错段）：
