@@ -131,6 +131,8 @@ def install():
                             saved += 1
                         if not self._flags['stop'] and (saved < num_episodes or rerecord):
                             log_say('Reset the environment', cfg.play_sounds)
+                            print(f'correction: {saved}/{num_episodes} attempts saved; rearrange the objects, then press n '
+                                  f'to start the next attempt (q stops)', flush=True)
                             self._wait(ctx, cfg.dataset.reset_time_s)
                 finally:
                     logger.info('correction: control loop ended - saving any in-progress episode')
@@ -194,6 +196,8 @@ def install():
                     logger.warning('correction: loop at %.1f Hz, below %s Hz', 1 / dt, ctx.runtime.cfg.fps)
                 precise_sleep(max(control_interval - dt, 0.0))
             self._engine.pause()
+            # n/r/q also set exit_early; clear it here or the reset phase that follows would end at once.
+            self._flags['exit_early'] = False
 
         def _park(self, ctx):
             """After an attempt: leader to the startup pose and limp, follower back to the startup pose."""

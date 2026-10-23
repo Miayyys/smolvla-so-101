@@ -100,12 +100,15 @@ for line in sys.stdin:
     r = json.loads(line)
     print(r['episode'], r['frames'], r['corrections'], r['human_fraction'], int(r['human_finished']))
 ")
+# Keys typed while the recording shut down (space, n, ...) would otherwise be read as the first answer.
+python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2>/dev/null
 echo "saved episodes $before.."(math $after - 1)"; mark each: y = task completed (with or without help), n = failed, s = skip (not counted)"
 for ep in (seq $before (math $after - 1))
     set row (string split ' ' -- (string match -r "^$ep .*" -- $stats))
     echo "episode $ep: $row[2] frames, $row[3] corrections, human $row[4] of frames"(test "$row[5]" = 1; and echo ', finished by human')
     while true
         read -P "episode $ep success? [y/n/s] " answer
+        set answer (string trim -- $answer)
         contains -- $answer y n s; and break
     end
     test $answer = s; and continue

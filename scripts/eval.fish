@@ -92,10 +92,13 @@ set after (uv run --frozen python -c "import json,sys; print(json.load(open(sys.
 set csv runs/real_eval/$_flag_name.csv
 mkdir -p runs/real_eval
 test -f $csv; or echo 'episode,success,policy,task,time,note' >$csv
+# Keys typed while the recording shut down (space, n, ...) would otherwise be read as the first answer.
+python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2>/dev/null
 echo "saved episodes $before.."(math $after - 1)"; mark each: y = success, n = failure, s = skip (not counted)"
 for ep in (seq $before (math $after - 1))
     while true
         read -P "episode $ep success? [y/n/s] " answer
+        set answer (string trim -- $answer)
         contains -- $answer y n s; and break
     end
     test $answer = s; and continue

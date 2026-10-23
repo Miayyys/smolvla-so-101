@@ -20,6 +20,7 @@ import shutil
 import subprocess
 import sys
 from threading import Event
+import time
 from types import SimpleNamespace
 
 import numpy as np
@@ -115,7 +116,7 @@ def record():
     follower, leader, engine = Follower(), Leader(), Engine()
     cfg = SimpleNamespace(fps=30, task='selftest', play_sounds=False, use_torch_compile=False, interpolation_multiplier=1,
                           display_data=False, return_to_initial_position=True,
-                          dataset=SimpleNamespace(num_episodes=2, episode_time_s=30, reset_time_s=0.2,
+                          dataset=SimpleNamespace(num_episodes=2, episode_time_s=30, reset_time_s=1.0,
                                                   single_task='Put the key in the white box.', push_to_hub=False))
     identity = SimpleNamespace(robot_observation_processor=lambda obs: obs, teleop_action_processor=lambda x: x[0],
                                robot_action_processor=lambda x: x[0])
@@ -133,9 +134,20 @@ def record():
         attempt(*args)
 
     strategy._attempt = counted_attempt
+    wait, waits = strategy._wait, []
+
+    def timed_wait(*args):
+        start = time.perf_counter()
+        wait(*args)
+        waits.append(time.perf_counter() - start)
+
+    strategy._wait = timed_wait
     strategy.setup(ctx)
     strategy.run(ctx)
     strategy.teardown(ctx)
+    # The n/r that ended an attempt must not also end the reset phase after it (no n is pressed during resets here).
+    print('reset phases (s)', [round(w, 2) for w in waits])
+    assert len(waits) == 2 and min(waits) > 0.9, waits
     return root, leader
 
 
