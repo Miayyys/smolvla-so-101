@@ -161,4 +161,5 @@ uv cache prune                   # 清理缓存中不再使用的包
 | `failed to set fps=30 (actual_fps=31.0)` | 顶视 1280×720 模式驱动只给 31 fps，相机配置写 `fps: 31`（`$CAMERAS` 已是） |
 | `torchcodec ... Could not load libtorchcodec` 警告 | 系统 FFmpeg 9 不被 torchcodec 0.11 支持，LeRobot 自动改用 pyav，可忽略 |
 | 串口 `Permission denied` | 用户需在 `uucp` 组（已在） |
+| `OpenCVCamera(...) read thread is not running.`（测试/录制中途崩溃） | 相机在 USB 上掉线了（`journalctl -k \| grep 'USB disconnect'` 可查）。2026-10-23 腕部相机（ZSKJ，接在 USB hub 上）8 分钟内掉线 3 次，之前录 200 段时一次没掉过。先把腕部相机线两头重新插紧、腕部转动处留够余量并固定；还掉就直接插电脑 USB 口，不经过 hub。崩溃前已完成的段会保存，正在录的那段不保存；脚本问成功与否时，被打断的那段按 `s` 跳过 |
 | 某相机/串口找不到 | `ls /dev/serial/by-id/ /dev/v4l/by-id/` 检查是否插好；`source scripts/so101_env.fish` 会提示缺哪个 |
