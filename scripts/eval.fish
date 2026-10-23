@@ -2,7 +2,7 @@
 # Run a trained policy on the real SO-101 for a few episodes (lerobot-rollout, episodic strategy), record the rollouts,
 # then ask for the success of each new episode and append it to runs/real_eval/<name>.csv.
 #
-#   fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." [-p runs/so101_key_v1/best] [-e 10] [-s 40] [-r 600] [--rtc] [--resume] [--dry-run]
+#   fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." [-p runs/so101_key_v1/best] [-e 10] [-s 40] [-r 600] [--smooth sigma] [--rtc] [--resume] [--dry-run]
 #
 # No leader arm: between episodes the follower returns (1 s) to the pose it had when the script started and holds it
 # while you rearrange the objects, so start with the arm in the same rest pose used when recording demos.
@@ -12,10 +12,10 @@
 # a background thread replans once 30 actions are left and guides the new chunk to match the next 20 old actions
 # (horizon 20 > the ~11-step real inference delay, so the first executed actions are still blended).
 
-argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'rtc' 'resume' 'dry-run' 'h/help' -- $argv
+argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'smooth=' 'rtc' 'resume' 'dry-run' 'h/help' -- $argv
 or return 1
 if set -q _flag_help; or not set -q _flag_name; or not set -q _flag_task
-    echo 'usage: fish scripts/eval.fish -n rollout_<name> -t "<task text>" [-p policy_dir=runs/so101_key_v1/best] [-e episodes=10] [-s episode_s=40] [-r reset_s=600] [--rtc] [--resume] [--dry-run]'
+    echo 'usage: fish scripts/eval.fish -n rollout_<name> -t "<task text>" [-p policy_dir=runs/so101_key_v1/best] [-e episodes=10] [-s episode_s=40] [-r reset_s=600] [--smooth sigma] [--rtc] [--resume] [--dry-run]'
     return 1
 end
 set -q _flag_policy; or set _flag_policy runs/so101_key_v1/best
@@ -60,8 +60,10 @@ end
 set inference --inference.type=sync
 set mode sync
 set -q _flag_rtc; and set mode rtc; and set inference --inference.type=rtc --inference.rtc.execution_horizon=20 --inference.rtc.max_guidance_weight=10.0 --inference.queue_threshold=30
+set -q _flag_smooth; or set _flag_smooth 0
+test $_flag_smooth != 0; and set mode $mode+smooth$_flag_smooth
 
-set cmd uv run --frozen lerobot-rollout \
+set cmd uv run --frozen python -m so101vla.rollout --smooth_sigma=$_flag_smooth \
     --robot.type=so101_follower --robot.port=$FOLLOWER --robot.id=follower --robot.cameras=$CAMERAS \
     --policy.path=$_flag_policy \
     --rename_map='{"observation.images.top": "observation.images.camera1", "observation.images.wrist": "observation.images.camera2"}' \
