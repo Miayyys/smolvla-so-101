@@ -2,6 +2,8 @@
 
   python -m so101vla.rollout [--smooth_sigma=2] <lerobot-rollout arguments>
 
+Also adds ``--strategy.type=correction`` (per-attempt human corrections with the leader arm, so101vla/correction.py).
+
 The model's chunks zigzag step to step (several direction reversals per second per joint, against ~0.01/s in the
 teleoperated demos). Smoothing the whole chunk once it is predicted uses only actions the model already planned, so
 it adds no lag; ends are edge-padded. It wraps ``SmolVLAPolicy._get_action_chunk``, which both sync
@@ -49,6 +51,8 @@ def main():
     if sigma > 0:
         install(sigma)
         print(f'so101vla.rollout: Gaussian smoothing of action chunks, sigma={sigma} steps', flush=True)
+    from so101vla import correction
+    correction.install()
     from lerobot.scripts.lerobot_rollout import main as rollout_main
     rollout_main()
 

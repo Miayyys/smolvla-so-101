@@ -53,11 +53,17 @@ def prepare(cfg, out):
     stays within ``tolerance_deg`` of the final state are cut down to ``keep_frames``: the cut frames are cached
     but never sampled, never enter the statistics, and action chunks are padded after the kept end. Without
     ``task`` in the config, each frame's language instruction is its own task from ``meta/tasks.parquet``.
+
+    With an ``intervention`` column (human-correction rollouts, so101vla/correction.py, merged with demos tagged all
+    True by scripts/merge_corrections.py), only human-driven frames are sampled and enter the statistics, and each
+    one's action chunk is padded after the end of its own correction run, so policy actions never become targets.
+    Validation episodes must be fully human-driven.
     """
     import av
     import pandas as pd
     from PIL import Image
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
+    from so101vla import correction as so101_correction
 
     root = Path(cfg['dataset_root'])
     info = json.loads((root / 'meta/info.json').read_text())
@@ -80,6 +86,8 @@ def prepare(cfg, out):
     task_names[tasks['task_index'].to_numpy()] = tasks.index.to_numpy()
     task_index = table['task_index'].to_numpy(dtype='int64')
     trim = cfg.get('trim_static_tail')
+    human = (np.stack(table['intervention'].to_numpy()).reshape(-1).astype(bool) if 'intervention' in table
+             else np.ones(len(eps), dtype=bool))
     kept = np.ones(len(eps), dtype=bool)
     end_rows = np.empty(len(eps), dtype='int64')
     validation_rows = []; trimmed = {}
@@ -95,6 +103,12 @@ def prepare(cfg, out):
             kept[end + 1:rows[-1] + 1] = False
             trimmed[int(ep)] = int(rows[-1] - end)
         end_rows[rows] = end
+        if not human[rows].all():
+            if ep in splits['validation']:
+                raise ValueError(f'Validation episode {ep} has policy-driven frames')
+            kept[rows[~human[rows]]] = False
+            for start, stop in so101_correction.runs(human[rows]):
+                end_rows[rows[start:stop]] = min(rows[stop - 1], end)
         if ep in splits['validation']:
             validation_rows.extend(np.linspace(rows[0], max(rows[0], end - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
     train = np.isin(eps, splits['train']) & kept
@@ -168,7 +182,8 @@ def prepare(cfg, out):
     manifest = {'config': cfg, 'splits': splits, 'frames': len(eps), 'train_frames': len(train_rows),
                 'validation_rows': validation_rows, 'tasks': task_names.tolist(),
                 'train_frames_by_task': {task_names[i]: int((task_index[train_rows] == i).sum()) for i in range(len(task_names))},
-                'trimmed_tail_frames': trimmed, 'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept).sum()),
+                'trimmed_tail_frames': trimmed, 'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept & human).sum()),
+                'policy_frames_excluded': int((~human).sum()),
                 'data_sha256': {str(p.relative_to(root)): sha(p) for p in data_files},
                 'partition_sha256': sha(cfg['partition']),
                 'caches': {k: {'sha256': c['sha256'], 'bytes': c['bytes']} for k, c in caches.items()},
@@ -177,7 +192,8 @@ def prepare(cfg, out):
                 'stats_sha256': sha(out / 'stats.json')}
     (out / 'prepared.json').write_text(json.dumps(manifest, indent=2) + '\n')
     emit(out, {'stage': 'prepared', 'train_frames': len(train_rows), 'validation_rows': len(validation_rows),
-               'trimmed_train_frames': manifest['trimmed_train_frames'], 'train_frames_by_task': manifest['train_frames_by_task'],
+               'trimmed_train_frames': manifest['trimmed_train_frames'], 'policy_frames_excluded': manifest['policy_frames_excluded'],
+               'train_frames_by_task': manifest['train_frames_by_task'],
                'cache_bytes': {k: c['bytes'] for k, c in caches.items()}, 'max_timestamp_error_s': max_alignment_error})
 
 

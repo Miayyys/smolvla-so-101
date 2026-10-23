@@ -150,6 +150,36 @@ fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box."
 - 结束后脚本逐段问是否成功（`y`/`n`/`s` 跳过不计），追加到 `runs/real_eval/<name>.csv` 并打印成功率；评测录像存在 `artifacts/datasets/<name>`，可用 §6 的 `lerobot-dataset-viz` 回看。
 - 训练用的任务文本、相机配置要与录制一致；物体摆放用训练中出现过的范围，另行记录摆放位置。
 
+### 纠错数据（人接管纠正）
+
+`scripts/dagger.fish`：模型控制从臂完成一次任务尝试（一段），出错时人用主臂接管纠正，纠正完再交还模型。每帧记录 `intervention`（True = 主臂在控制）。设计与验证见 [notes/correction-collection.md](notes/correction-collection.md)（目前只在假硬件上验证过）。
+
+```fish
+fish scripts/dagger.fish -n rollout_dagger_doll_r1 -t "Put the doll in the white box." --rtc            # 默认 runs/so101_pilot_v2/best，10 段 × 60 s，平滑 σ=2
+fish scripts/dagger.fish -n rollout_dagger_doll_r1 -t "Put the doll in the white box." --rtc --resume   # 追加
+```
+
+- 需要接主臂。启动前把两只臂都摆到录示教时的起始姿态。终端窗口要保持在前台（Wayland 下按键从终端读）。
+- 按键：
+  - `空格`：模型 → 暂停。模型停止，主臂在 2 s 内被带到从臂的姿态并保持住。这时握住主臂。
+  - `Tab`：暂停 → 纠正。主臂卸力，从臂跟随主臂。
+  - 纠正中按 `空格`：交还模型。主臂停在你松手的位置并保持，不会掉下来。纠正中按 `Tab` 则两只臂都保持不动（暂停）。
+  - `n` 结束本段并保存。按之前先松开主臂，它会被带回起始姿态后卸力。`r` 重来本段（不保存），`q` 停止。
+- 规则：一旦接管，至少完成当前这一小步（例如夹稳并抬起）再交还。本段里模型在同一个地方又失败时，由人做完本段再按 `n`。暂停期间的帧不记录。
+- 结束后逐段显示帧数、接管次数、人控帧占比、是否由人做完，并询问成功与否（`y` = 任务完成，有没有人帮忙都算）。结果追加到 `runs/dagger/<name>.csv`，最后打印"完成数 / 无接管完成数 / 总接管次数"。随时可查看统计：`uv run --frozen python -m so101vla.correction artifacts/datasets/<name>`。
+
+合并成训练集（示教 + 纠错段）：
+
+```fish
+uv run --frozen python scripts/merge_corrections.py --demo artifacts/datasets/so101_pilot_v2 \
+    --demo-partition configs/so101_pilot_v2_partition.json --out so101_dagger_r1 \
+    --partition-out configs/so101_dagger_r1_partition.json artifacts/datasets/rollout_dagger_doll_r1 artifacts/datasets/rollout_dagger_key_r1
+```
+
+- 示教集要先加上全为 True 的 `intervention` 列才能和纠错段合并。脚本会把带这一列的副本缓存在 `artifacts/datasets/so101_pilot_v2_intervention`（3.6 GB，已建好），以后合并直接复用。
+- 合并后编号：示教在前，编号不变，验证段沿用原来的；纠错段全部归入训练。训练配置复制 `configs/so101_pilot_v2.json`，改 `dataset_root`、`partition`、`output`。`train.py` 遇到 `intervention` 列时只用人控帧训练，每帧的动作块在所在纠正片段结束处截止，之后补 padding。
+- 不接硬件的完整自测（假从臂、主臂和推理 → 录制 → 合并 → prepare）：`uv run --frozen python scripts/correction_selftest.py`，约 3 分钟。
+
 ## 8. 环境管理（uv）
 
 ```fish
