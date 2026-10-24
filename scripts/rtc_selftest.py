@@ -1,12 +1,14 @@
-"""Check so101vla/rollout.py's RTC reset fix against LeRobot's real RTC inference thread (policy stubbed, no GPU/arm).
+"""Check so101vla/rollout.py's RTC fixes against LeRobot's real RTC inference thread (policy stubbed, no GPU/arm).
 
-  uv run --frozen python scripts/rtc_reset_selftest.py
+  uv run --frozen python scripts/rtc_selftest.py
 
-The stub policy returns a chunk filled with the observed state value, so every action shows which observation it was
-planned from. Two cases, each run with LeRobot's original reset and with the patched one:
+The stub policy returns chunk step k as (observed state value + 0.01 k), so every action shows which observation it
+was planned from and which chunk step it is. Two cases, each run with LeRobot's original code and with the patches:
   A  hand-back race: reset + resume, then the loop publishes the fresh observation 0.3 s later (a camera read);
   B  in-flight inference: reset while a 0.3 s inference on the old observation is running.
-The first action after the reset must come from the fresh observation (2.0), not the old one (1.0).
+The first action after the reset must be step 0 of the chunk planned from the fresh observation (2.00): not from the
+old observation (1.xx), and no steps skipped since nothing was executed while it was computed (2.0x).
+Also checks ActionQueue directly: with 3 actions consumed during an inference, exactly 3 are skipped.
 """
 
 import time
@@ -25,7 +27,8 @@ class Policy:
 
     def predict_action_chunk(self, batch, inference_delay=0, prev_chunk_left_over=None):
         time.sleep(self.latency)
-        return torch.full((1, 50, 6), float(batch['observation.state'].flatten()[0]))
+        value = float(batch['observation.state'].flatten()[0])
+        return (value + 0.01 * torch.arange(50, dtype=torch.float32)).view(1, 50, 1).repeat(1, 1, 6)
 
     def reset(self):
         pass
@@ -80,16 +83,33 @@ def first_action_after_reset(case):
         e.stop()
 
 
+def queue_skip(consumed):
+    from lerobot.policies.rtc.action_queue import ActionQueue
+    from lerobot.policies.rtc.configuration_rtc import RTCConfig
+    q = ActionQueue(RTCConfig(execution_horizon=20))
+    chunk = lambda v: (v + 0.01 * torch.arange(50, dtype=torch.float32)).view(50, 1).repeat(1, 6)
+    q.merge(chunk(1.0), chunk(1.0), 0, 0)
+    before = q.get_action_index()
+    for _ in range(consumed):
+        q.get()
+    q.merge(chunk(2.0), chunk(2.0), 11, before)  # latency estimate 11 steps
+    return round((float(q.get()[0]) - 2.0) / 0.01)
+
+
 if __name__ == '__main__':
     from so101vla import rollout
     results = {}
     for patched in (False, True):
         if patched:
-            rollout.install_rtc_reset_fix()
+            rollout.install_rtc_fixes()
+        name = 'patched ' if patched else 'original'
         for case in ('A', 'B'):
-            results[(patched, case)] = first_action_after_reset(case)
-            print(f"{'patched ' if patched else 'original'} reset, case {case}: first action after reset planned from "
-                  f"observation {results[(patched, case)]:.1f} (fresh = 2.0)")
-    assert results[(True, 'A')] == 2.0 and results[(True, 'B')] == 2.0, results
-    print('rtc reset selftest: OK' + ('' if 1.0 in (results[(False, 'A')], results[(False, 'B')])
-                                      else ' (the original reset did not show the stale chunk in this run)'))
+            results[(patched, case)] = value = first_action_after_reset(case)
+            print(f'{name} case {case}: first action after reset = {value:.2f} -> planned from observation {int(value)}, '
+                  f'chunk step {round((value - int(value)) / 0.01)} (want observation 2, step 0)')
+        for consumed in (0, 3):
+            results[(patched, consumed)] = skipped = queue_skip(consumed)
+            print(f'{name} queue: {consumed} actions consumed during inference -> {skipped} skipped (want {consumed})')
+    assert all(abs(results[(True, c)] - 2.0) < 1e-6 for c in 'AB'), results
+    assert results[(True, 0)] == 0 and results[(True, 3)] == 3, results
+    print('rtc selftest: OK')

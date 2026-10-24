@@ -12,6 +12,12 @@ from the -103 deg rest pose for ~0.7 s), and a correction hand-back with one pla
 patched reset also drops the observation (the thread waits for a fresh one) and swaps in a new queue, so a stale
 in-flight chunk is merged into the discarded one.
 
+RTC skip fix (always on): when a new chunk replaces the queue, LeRobot drops its first ``ceil(latency / dt)`` actions
+(~11) as "executed during inference", even when nothing was executed (episode start, hand-back after a correction:
+the arm holds still). The arm then jumps to where the plan is ~0.37 s later (up to 30 deg at hand-back). The patch
+drops the number of actions actually consumed during the inference instead (LeRobot already computes it and only
+warns "Indexes diff is not equal to real delay" when it differs).
+
 The model's chunks zigzag step to step (several direction reversals per second per joint, against ~0.01/s in the
 teleoperated demos). Smoothing the whole chunk once it is predicted uses only actions the model already planned, so
 it adds no lag; ends are edge-padded. It wraps ``SmolVLAPolicy._get_action_chunk``, which both sync
@@ -48,7 +54,7 @@ def install(sigma):
     SmolVLAPolicy._get_action_chunk = _get_action_chunk
 
 
-def install_rtc_reset_fix():
+def install_rtc_fixes():
     from lerobot.policies.rtc.action_queue import ActionQueue
     from lerobot.rollout.inference.rtc import RTCInferenceEngine
 
@@ -63,6 +69,13 @@ def install_rtc_reset_fix():
 
     RTCInferenceEngine.reset = reset
 
+    def resolve_delay(self, real_delay, action_index_before_inference=None):
+        if action_index_before_inference is None:
+            return max(0, real_delay)
+        return max(0, self.last_index - action_index_before_inference)
+
+    ActionQueue._check_and_resolve_delays = resolve_delay
+
 
 def main():
     sigma, args = 0.0, []
@@ -75,7 +88,7 @@ def main():
     if sigma > 0:
         install(sigma)
         print(f'so101vla.rollout: Gaussian smoothing of action chunks, sigma={sigma} steps', flush=True)
-    install_rtc_reset_fix()
+    install_rtc_fixes()
     from so101vla import correction
     correction.install()
     from lerobot.scripts.lerobot_rollout import main as rollout_main
