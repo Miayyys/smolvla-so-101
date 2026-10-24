@@ -13,7 +13,8 @@ leader arm where it goes wrong and hands back once the current step is done. Eve
 Paused frames are not recorded, so a correction directly continues the frame sequence. ``--dataset.episode_time_s``
 limits recorded seconds per attempt (0 = no limit) and never ends an attempt during a correction. Outside a correction the leader
 holds its pose under torque (it never drops when handing back); at the end of an attempt it is driven to the
-follower's startup pose and released, and the follower returns (1 s) to that pose while the scene is reset.
+follower's startup pose and released, and the follower returns (1 s) to that pose while the scene is reset. Every
+attempt, the first one included, starts only when n is pressed (or the reset time runs out).
 Differences from LeRobot's ``dagger`` strategy: per-attempt episodes instead of size-based rotation, autonomous and
 correction frames both recorded, and the leader's goal is set to its present position before every torque enable
 (Feetech servos keep the last goal while limp and would jump back to it).
@@ -118,6 +119,9 @@ def install():
             with VideoEncodingManager(dataset):
                 try:
                     saved = 0
+                    # The first attempt also waits for n, so arranging the scene after launch is not recorded.
+                    print('correction: arrange the objects, then press n to start the first attempt (q stops)', flush=True)
+                    self._wait(ctx, cfg.dataset.reset_time_s)
                     while saved < num_episodes and not self._flags['stop'] and not ctx.runtime.shutdown_event.is_set():
                         log_say(f'Recording episode {dataset.num_episodes}', cfg.play_sounds)
                         self._attempt(ctx, cfg.dataset.episode_time_s, cfg.dataset.single_task or cfg.task)

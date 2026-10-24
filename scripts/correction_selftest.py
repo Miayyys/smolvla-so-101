@@ -148,7 +148,8 @@ def record():
     strategy.teardown(ctx)
     # The n/r that ended an attempt must not also end the reset phase after it (no n is pressed during resets here).
     print('reset phases (s)', [round(w, 2) for w in waits])
-    assert len(waits) == 2 and min(waits) > 0.9, waits
+    # one wait before the first attempt (arranging after launch) and one after each of the two attempts before the last
+    assert len(waits) == 3 and min(waits) > 0.9, waits
     return root, leader
 
 

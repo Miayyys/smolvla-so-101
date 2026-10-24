@@ -14,8 +14,8 @@
 #   n      end the attempt (let go of the leader: it is driven back to the rest pose), r redo it, q stop
 # Rule of thumb: once you take over, finish the current step (e.g. grasp and lift) before handing back; if the model
 # fails at the same spot again in this attempt, finish the attempt yourself and press n.
-# Between attempts the follower returns to its startup pose (start with both arms in the demo rest pose); rearrange
-# the objects, then n. Attempts end only with n unless -s sets a limit on recorded seconds (paused time and the 2 s
+# After launch and between attempts, arrange the objects and press n to start the next attempt (the follower returns to
+# its startup pose in between; start with both arms in the demo rest pose). Attempts end only with n unless -s sets a limit on recorded seconds (paused time and the 2 s
 # leader moves do not count, and a correction is never cut short). Inference flags as in eval.fish.
 
 argparse 'n/name=' 't/task=' 'p/policy=' 'e/episodes=' 's/episode-time=' 'r/reset-time=' 'smooth=' 'rtc' 'resume' 'dry-run' 'h/help' -- $argv
