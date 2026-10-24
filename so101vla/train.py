@@ -57,7 +57,11 @@ def prepare(cfg, out):
     With an ``intervention`` column (human-correction rollouts, so101vla/correction.py, merged with demos tagged all
     True by scripts/merge_corrections.py), only human-driven frames are sampled and enter the statistics, and each
     one's action chunk is padded after the end of its own correction run, so policy actions never become targets.
-    Validation episodes must be fully human-driven.
+    Validation episodes must be fully human-driven. ``correction_repeat`` = k lists the human frames of correction
+    episodes (episodes with any policy frame) k times in the sampled rows (uniform sampling, so k times as likely);
+    statistics and the reported frame counts use each frame once. ``stats_from`` = path of an earlier run's stats.json
+    reuses its normalization (fine-tuning from that run with ``init_weights`` keeps the inputs/outputs the weights were
+    trained for, and keeps the normalized validation error comparable).
     """
     import av
     import pandas as pd
@@ -113,8 +117,13 @@ def prepare(cfg, out):
             validation_rows.extend(np.linspace(rows[0], max(rows[0], end - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
     train = np.isin(eps, splits['train']) & kept
     train_rows = np.flatnonzero(train)
+    correction_episodes = np.unique(eps[~human])
+    correction_rows = train_rows[np.isin(eps[train_rows], correction_episodes)]
+    sampled_rows = np.concatenate([train_rows] + [correction_rows] * (cfg.get('correction_repeat', 1) - 1))
     stats = {key: {'mean': a[train].mean(0).tolist(), 'std': np.maximum(a[train].std(0), 1e-6).tolist()}
              for key, a in [('observation.state', states), ('action', actions)]}
+    if cfg.get('stats_from'):
+        stats = json.loads(Path(cfg['stats_from']).read_text())
     episodes = pd.concat([pd.read_parquet(p) for p in sorted((root / 'meta/episodes').rglob('*.parquet'))]).set_index('episode_index')
 
     selected_checks = [0, len(eps) // 2, len(eps) - 1]
@@ -176,7 +185,7 @@ def prepare(cfg, out):
                 image = np.asarray(Image.open(io.BytesIO(stream.read(int(caches[video_key]['lengths'][row])))).convert('RGB'))
                 rgb_errors[video_key].append(float(np.abs(image.astype('float32') - official).mean()))
     np.savez(out / 'data.npz', states=states, actions=actions, episodes=eps, end_rows=end_rows,
-             train_rows=train_rows, validation_rows=validation_rows, task_index=task_index, task_names=task_names.astype(str),
+             train_rows=sampled_rows, validation_rows=validation_rows, task_index=task_index, task_names=task_names.astype(str),
              **{f'{k.split(".")[-1]}_{name}': c[name] for k, c in caches.items() for name in ('offsets', 'lengths')})
     (out / 'stats.json').write_text(json.dumps(stats, indent=2) + '\n')
     manifest = {'config': cfg, 'splits': splits, 'frames': len(eps), 'train_frames': len(train_rows),
@@ -184,15 +193,19 @@ def prepare(cfg, out):
                 'train_frames_by_task': {task_names[i]: int((task_index[train_rows] == i).sum()) for i in range(len(task_names))},
                 'trimmed_tail_frames': trimmed, 'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept & human).sum()),
                 'policy_frames_excluded': int((~human).sum()),
+                'correction_train_frames': len(correction_rows), 'correction_repeat': cfg.get('correction_repeat', 1),
+                'sampled_rows': len(sampled_rows),
                 'data_sha256': {str(p.relative_to(root)): sha(p) for p in data_files},
                 'partition_sha256': sha(cfg['partition']),
                 'caches': {k: {'sha256': c['sha256'], 'bytes': c['bytes']} for k, c in caches.items()},
                 'max_timestamp_error_s': max_alignment_error, 'jpeg_rgb_mae_0_255': rgb_errors,
                 'official_decoder_exact_checks': selected_checks,
-                'stats_sha256': sha(out / 'stats.json')}
+                'stats_sha256': sha(out / 'stats.json'),
+                'stats_from_sha256': sha(cfg['stats_from']) if cfg.get('stats_from') else None}
     (out / 'prepared.json').write_text(json.dumps(manifest, indent=2) + '\n')
     emit(out, {'stage': 'prepared', 'train_frames': len(train_rows), 'validation_rows': len(validation_rows),
                'trimmed_train_frames': manifest['trimmed_train_frames'], 'policy_frames_excluded': manifest['policy_frames_excluded'],
+               'correction_train_frames': len(correction_rows), 'sampled_rows': len(sampled_rows),
                'train_frames_by_task': manifest['train_frames_by_task'],
                'cache_bytes': {k: c['bytes'] for k, c in caches.items()}, 'max_timestamp_error_s': max_alignment_error})
 

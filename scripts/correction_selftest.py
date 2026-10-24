@@ -191,7 +191,7 @@ def check_merge_and_prepare(root):
         merged = demo.parent / 'selftest_correction_merged'
         cfg = {'dataset_root': str(merged), 'partition': str(WORK / 'partition.json'), 'validation_frames_per_episode': 2,
                'camera_map': {'observation.images.camera1': 'observation.images.top', 'observation.images.camera2': 'observation.images.wrist'},
-               'trim_static_tail': {'tolerance_deg': 2.0, 'keep_frames': 15}}
+               'trim_static_tail': {'tolerance_deg': 2.0, 'keep_frames': 15}, 'correction_repeat': 4}
         out = WORK / 'prepared'; out.mkdir()
         prepare(cfg, out)
         data = np.load(out / 'data.npz')
@@ -209,7 +209,13 @@ def check_merge_and_prepare(root):
                 run = rows[start:stop]
                 assert (end_rows[run] <= run[-1]).all(), (ep, end_rows[run], run[-1])
                 print(f'merged episode {ep}: correction rows {run[0]}..{run[-1]}, chunk ends {sorted(set(end_rows[run].tolist()))}')
-        print('prepare manifest: train_frames', manifest['train_frames'], 'policy_frames_excluded', manifest['policy_frames_excluded'])
+        # correction_repeat 4: correction-episode human frames listed 4 times, demo frames once, policy frames never
+        sampled = data['train_rows']; counts = np.bincount(sampled, minlength=len(eps))
+        assert manifest['sampled_rows'] == len(sampled) == manifest['train_frames'] + 3 * manifest['correction_train_frames']
+        assert set(np.unique(counts[eps < n_demo])) <= {0, 1} and set(np.unique(counts[eps >= n_demo])) <= {0, 4}
+        assert not (counts[~human] > 0).any()
+        print('prepare manifest: train_frames', manifest['train_frames'], 'policy_frames_excluded', manifest['policy_frames_excluded'],
+              'correction_train_frames', manifest['correction_train_frames'], 'sampled_rows', manifest['sampled_rows'])
     finally:
         if not ARGS.keep:
             shutil.rmtree(tagged, ignore_errors=True)
