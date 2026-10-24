@@ -138,7 +138,7 @@ fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box."
 
 - 不接主臂：脚本启动时从臂所处姿态就是"起始姿态"，每段结束后从臂 1 秒内回到该姿态并保持。所以**启动前把从臂摆到录示教时的起始姿态**。
 - 流程（每段）：听到 `Recording episode N` → 模型控制从臂（首次推理约 0.6 s，之后每 50 步/1.7 s 停顿约 0.17 s 推理）→ 成功或明显失败后按 `n` → 从臂回起始姿态 → 摆好物体按 `n` 开始下一段。`r` 重测本段（该段不保存），`q` 停止。
-- 异步推理加 `--rtc`（LeRobot Real-Time Chunking）：后台线程在队列剩 30 步时就生成下一块，并引导新块前 20 步与旧块衔接（实测推理延迟约 11 步，视野要大于它）。偶尔出现 `Indexes diff is not equal to real delay` 警告不要紧：意思是推理耗时折算的步数比实际执行的多 1 步，新块开头会多丢 1 步，机械臂不再每 1.7 s 停一下。离线检查和第 6500 步模型的真机对比见 [notes/inference-sync-vs-rtc.md](notes/inference-sync-vs-rtc.md)（视野 10 已测；视野 20 的真机效果未测量）。CSV 的 note 列记录 `sync`/`rtc`。同步与 RTC 的结果用不同的评测名分开，例如 `rollout_pilot_v2_s6500_doll_rtc`。
+- 异步推理加 `--rtc`（LeRobot Real-Time Chunking）：后台线程在队列剩 30 步时就生成下一块，并引导新块前 20 步与旧块衔接（实测推理延迟约 11 步，视野要大于它）。机械臂不再每 1.7 s 停一下。2026-10-24 起，`so101vla/rollout.py` 修复了 LeRobot RTC 的两个问题：重置后用旧观测推理；新动作块开头按估算的推理耗时多丢约 11 步，现在改为按实际执行的步数丢弃，因此原来的 `Indexes diff is not equal to real delay` 警告不再出现。详见 [notes/inference-sync-vs-rtc.md](notes/inference-sync-vs-rtc.md)。离线检查和第 6500 步模型的真机对比见 [notes/inference-sync-vs-rtc.md](notes/inference-sync-vs-rtc.md)（视野 10 已测；视野 20 的真机效果未测量）。CSV 的 note 列记录 `sync`/`rtc`。同步与 RTC 的结果用不同的评测名分开，例如 `rollout_pilot_v2_s6500_doll_rtc`。
 - 只试一次、不保存（`scripts/try.fish`，LeRobot `--strategy.type=base`）：不建评测数据集、不写 CSV。`-s` 秒后（默认 40，`-s 0` 一直跑）或按 Ctrl+C 停止，从臂回到启动时的姿态后退出。`n`/`r` 键无效。
   ```fish
   fish scripts/try.fish -t "Put the doll in the white box." --rtc          # 默认 runs/so101_pilot_v2/best

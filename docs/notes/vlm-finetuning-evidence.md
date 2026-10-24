@@ -1,5 +1,7 @@
 # 冻结 VLM、LoRA 与全量微调：外部证据（2026-10-24 整理）
 
+全部参考资料的清单见 [references.md](../references.md)。
+
 背景：实验三（只训练动作模块，VLM 冻结）真机成绩没有提升（玩偶 6/20、钥匙 4/20，见 [实验三](../experiments/exp3-pilot-v3.md)）。用户认为问题可能出在 VLM 上。以下数字均来自原文；"未找到"表示原文中没有。
 
 ## 我们的模型（SmolVLA，按 `runs/so101_pilot_v3/best/model.safetensors` 统计）
