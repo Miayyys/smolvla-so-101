@@ -1,0 +1,46 @@
+{
+  "model_dir": "artifacts/smolvla_base",
+  "vlm_assets_dir": "artifacts/transfer/smolvlm2_assets",
+  "dataset_root": "artifacts/datasets/so101_pilot_v3",
+  "partition": "configs/so101_pilot_v3_partition.json",
+  "output": "runs/so101_full_v5",
+  "cache_dirs": {
+    "observation.images.top": "/dev/shm/so101_full_v5"
+  },
+  "prepare_workers": 32,
+  "seed": 42,
+  "camera_map": {
+    "observation.images.camera1": "observation.images.top",
+    "observation.images.camera2": "observation.images.wrist"
+  },
+  "image_size": 512,
+  "batch_size": 16,
+  "gradient_accumulation": 4,
+  "steps": 5000,
+  "learning_rate": 5e-05,
+  "minimum_learning_rate": 2.5e-06,
+  "warmup_steps": 200,
+  "weight_decay": 1e-10,
+  "gradient_clip": 10.0,
+  "eval_every": 500,
+  "minimum_steps": 5000,
+  "patience_evaluations": 1000,
+  "validation_frames_per_episode": 10,
+  "save_last": true,
+  "evaluation": "real_offline",
+  "train_vlm": true,
+  "training_scope": "full fine-tuning (train_vlm): vision encoder, connector, language model and all 16 action expert layers; LeRobot still freezes the last VLM layer, its final norm and lm_head, which get no gradient",
+  "schedule_source": "experiment 3's continuation schedule (lr 5e-5 for all trained parameters, warmup 200, cosine to 2.5e-6, 5000 steps) from experiment 4's best (fresh optimizer); effective batch 64 = 16 x 4 accumulation on an RTX 4090 24 GB",
+  "data_scope": "experiment 5: experiment 4's data, split and sampling plus trim_static_head (only the last 5 of the leading frames within 2 deg of the first state are sampled, so the start pose is no longer labelled 'wait'); normalization stats reused from runs/so101_pilot_v2/stats.json; validation frames start after the cut, so step 0 is experiment 4's best on the new validation rows",
+  "trim_static_head": {
+    "tolerance_deg": 2.0,
+    "keep_frames": 5
+  },
+  "trim_static_tail": {
+    "tolerance_deg": 2.0,
+    "keep_frames": 15
+  },
+  "correction_repeat": 4,
+  "stats_from": "runs/so101_pilot_v2/stats.json",
+  "init_weights": "runs/so101_full_v4/best/model.safetensors"
+}

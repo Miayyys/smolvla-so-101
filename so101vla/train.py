@@ -42,6 +42,49 @@ def cache_name(video_key):
     return video_key.split('.')[-1] + '_frames.jpeg.bin'
 
 
+def cache_path(cfg, out, video_key):
+    """``cache_dirs`` = {video key: directory} moves a camera's cache out of ``output`` (e.g. to /dev/shm)."""
+    folder = Path(cfg.get('cache_dirs', {}).get(video_key, out))
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / cache_name(video_key)
+
+
+# Keys that do not change what ``prepare`` writes: they may differ between preparing and training.
+NOT_PREPARED_KEYS = ('cache_dirs', 'prepare_workers', 'batch_size', 'gradient_accumulation', 'training_scope', 'schedule_source')
+
+
+def prepared_identity(cfg):
+    return {k: v for k, v in cfg.items() if k not in NOT_PREPARED_KEYS}
+
+
+def decode_episode(path, expected, rows, fps, checks):
+    """Decode one episode's frames as JPEG bytes (worker process); returns (jpegs, max error, {row: RGB})."""
+    import av
+    from PIL import Image
+    jpegs = []; arrays = {}; max_error = 0.0
+    with av.open(str(path)) as container:
+        stream = container.streams.video[0]
+        stream.thread_type = 'AUTO'
+        container.seek(int(max(expected[0] - 1.0, 0) / stream.time_base), stream=stream)
+        for frame in container.decode(stream):
+            t = float(frame.pts * stream.time_base)
+            if t < expected[0] - 0.5 / fps:
+                continue
+            if len(jpegs) == len(rows):
+                break
+            error = abs(t - expected[len(jpegs)])
+            max_error = max(max_error, error)
+            if error > 1e-3:
+                raise ValueError(f'{path}: video/table timestamp mismatch at frame {len(jpegs)}: {error}')
+            array = frame.to_ndarray(format='rgb24')
+            buffer = io.BytesIO()
+            Image.fromarray(array).save(buffer, format='JPEG', quality=95, subsampling=0)
+            if rows[len(jpegs)] in checks:
+                arrays[int(rows[len(jpegs)])] = array
+            jpegs.append(buffer.getvalue())
+    return jpegs, max_error, arrays
+
+
 def prepare(cfg, out):
     """Cache a LeRobot v3 dataset (any number of data/video files) as per-camera JPEG streams.
 
@@ -51,7 +94,12 @@ def prepare(cfg, out):
 
     With ``trim_static_tail`` = {tolerance_deg, keep_frames}, each episode's trailing frames in which every joint
     stays within ``tolerance_deg`` of the final state are cut down to ``keep_frames``: the cut frames are cached
-    but never sampled, never enter the statistics, and action chunks are padded after the kept end. Without
+    but never sampled, never enter the statistics, and action chunks are padded after the kept end.
+    ``trim_static_head`` = {tolerance_deg, keep_frames} does the same for the leading frames that stay within
+    ``tolerance_deg`` of the first state (the operator not yet moving): only the last ``keep_frames`` of them are
+    sampled, so at the start pose the targets start moving within ``keep_frames`` steps instead of teaching the
+    model to wait there (experiment 4 stalled at the rest pose on the real arm), and validation frames start after
+    the cut. Without
     ``task`` in the config, each frame's language instruction is its own task from ``meta/tasks.parquet``.
 
     With an ``intervention`` column (human-correction rollouts, so101vla/correction.py, merged with demos tagged all
@@ -63,7 +111,6 @@ def prepare(cfg, out):
     reuses its normalization (fine-tuning from that run with ``init_weights`` keeps the inputs/outputs the weights were
     trained for, and keeps the normalized validation error comparable).
     """
-    import av
     import pandas as pd
     from PIL import Image
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -90,15 +137,21 @@ def prepare(cfg, out):
     task_names[tasks['task_index'].to_numpy()] = tasks.index.to_numpy()
     task_index = table['task_index'].to_numpy(dtype='int64')
     trim = cfg.get('trim_static_tail')
+    trim_head = cfg.get('trim_static_head')
     human = (np.stack(table['intervention'].to_numpy()).reshape(-1).astype(bool) if 'intervention' in table
              else np.ones(len(eps), dtype=bool))
     kept = np.ones(len(eps), dtype=bool)
     end_rows = np.empty(len(eps), dtype='int64')
-    validation_rows = []; trimmed = {}
+    validation_rows = []; trimmed = {}; trimmed_head = {}
     for ep in sorted(set(eps.tolist())):
         rows = np.flatnonzero(eps == ep)
         assert np.array_equal(rows, np.arange(rows[0], rows[-1] + 1))
-        end = rows[-1]
+        begin, end = rows[0], rows[-1]
+        if trim_head:
+            moving = np.flatnonzero((np.abs(states[rows] - states[rows[0]]) > trim_head['tolerance_deg']).any(1))
+            begin = rows[0] + max(0, (moving[0] if len(moving) else len(rows)) - trim_head['keep_frames'])
+            kept[rows[0]:begin] = False
+            trimmed_head[int(ep)] = int(begin - rows[0])
         if trim:
             still = (np.abs(states[rows] - states[rows[-1]]) <= trim['tolerance_deg']).all(1)
             first = len(rows)
@@ -114,7 +167,7 @@ def prepare(cfg, out):
             for start, stop in so101_correction.runs(human[rows]):
                 end_rows[rows[start:stop]] = min(rows[stop - 1], end)
         if ep in splits['validation']:
-            validation_rows.extend(np.linspace(rows[0], max(rows[0], end - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
+            validation_rows.extend(np.linspace(begin, max(begin, end - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
     train = np.isin(eps, splits['train']) & kept
     train_rows = np.flatnonzero(train)
     correction_episodes = np.unique(eps[~human])
@@ -130,53 +183,47 @@ def prepare(cfg, out):
     arrays = {}
     caches = {}
     max_alignment_error = 0.0
+    # Episodes are decoded in worker processes (``prepare_workers``) and written in episode order, so the
+    # cache bytes are the same as with one process; at most 2 x workers decoded episodes wait in memory.
+    from collections import deque
+    from concurrent.futures import ProcessPoolExecutor
+    workers = cfg.get('prepare_workers', 1)
     for video_key in camera_map(cfg).values():
-        cache_path = out / cache_name(video_key)
-        partial = cache_path.with_suffix('.partial')
+        target_path = cache_path(cfg, out, video_key)
+        partial = target_path.with_suffix('.partial')
         offsets = np.zeros(len(eps), dtype='int64'); lengths = np.zeros(len(eps), dtype='int64')
-        with partial.open('wb') as target:
-            for ep in sorted(set(eps.tolist())):
-                rows = np.flatnonzero(eps == ep)
-                meta = episodes.loc[ep]
-                path = root / info['video_path'].format(video_key=video_key, chunk_index=int(meta[f'videos/{video_key}/chunk_index']),
-                                                        file_index=int(meta[f'videos/{video_key}/file_index']))
-                expected = float(meta[f'videos/{video_key}/from_timestamp']) + timestamps[rows]
-                count = 0
-                with av.open(str(path)) as container:
-                    stream = container.streams.video[0]
-                    stream.thread_type = 'AUTO'
-                    container.seek(int(max(expected[0] - 1.0, 0) / stream.time_base), stream=stream)
-                    for frame in container.decode(stream):
-                        t = float(frame.pts * stream.time_base)
-                        if t < expected[0] - 0.5 / fps:
-                            continue
-                        if count == len(rows):
-                            break
-                        error = abs(t - expected[count])
-                        max_alignment_error = max(max_alignment_error, error)
-                        if error > 1e-3:
-                            raise ValueError(f'{video_key} episode {ep}: video/table timestamp mismatch at frame {count}: {error}')
-                        array = frame.to_ndarray(format='rgb24')
-                        buffer = io.BytesIO()
-                        Image.fromarray(array).save(buffer, format='JPEG', quality=95, subsampling=0)
-                        data = buffer.getvalue()
-                        row = rows[count]
+        jobs = []
+        for ep in sorted(set(eps.tolist())):
+            rows = np.flatnonzero(eps == ep)
+            meta = episodes.loc[ep]
+            path = root / info['video_path'].format(video_key=video_key, chunk_index=int(meta[f'videos/{video_key}/chunk_index']),
+                                                    file_index=int(meta[f'videos/{video_key}/file_index']))
+            jobs.append((ep, rows, path, float(meta[f'videos/{video_key}/from_timestamp']) + timestamps[rows]))
+        with partial.open('wb') as target, ProcessPoolExecutor(max_workers=workers) as pool:
+            pending = deque()
+            for index in range(len(jobs) + 1):
+                if index < len(jobs):
+                    ep, rows, path, expected = jobs[index]
+                    pending.append((ep, rows, pool.submit(decode_episode, path, expected, rows, fps, selected_checks)))
+                while pending and (len(pending) >= 2 * workers or index == len(jobs)):
+                    ep, rows, future = pending.popleft()
+                    jpegs, error, checked = future.result()
+                    if len(jpegs) != len(rows):
+                        raise ValueError(f'{video_key} episode {ep}: {len(jpegs)} video frames for {len(rows)} table rows')
+                    max_alignment_error = max(max_alignment_error, error)
+                    for row, data in zip(rows, jpegs):
                         offsets[row] = target.tell(); lengths[row] = len(data); target.write(data)
-                        if row in selected_checks:
-                            arrays[(video_key, row)] = array
-                        count += 1
-                if count != len(rows):
-                    raise ValueError(f'{video_key} episode {ep}: {count} video frames for {len(rows)} table rows')
-                emit(out, {'stage': 'cache', 'camera': video_key, 'episode': int(ep), 'frames': int(rows[-1]) + 1, 'total': len(eps)})
-        partial.replace(cache_path)
-        caches[video_key] = {'offsets': offsets, 'lengths': lengths, 'sha256': sha(cache_path), 'bytes': cache_path.stat().st_size}
+                    arrays.update({(video_key, row): array for row, array in checked.items()})
+                    emit(out, {'stage': 'cache', 'camera': video_key, 'episode': int(ep), 'frames': int(rows[-1]) + 1, 'total': len(eps)})
+        partial.replace(target_path)
+        caches[video_key] = {'offsets': offsets, 'lengths': lengths, 'sha256': sha(target_path), 'bytes': target_path.stat().st_size}
 
     # LeRobot's own reader independently validates RGB decoding and time offsets.
     dataset = LeRobotDataset(info.get('repo_id', 'local/dataset'), root=root.resolve(), video_backend='pyav', return_uint8=True)
     rgb_errors = {}
     for video_key in camera_map(cfg).values():
         rgb_errors[video_key] = []
-        with (out / cache_name(video_key)).open('rb') as stream:
+        with cache_path(cfg, out, video_key).open('rb') as stream:
             for row in selected_checks:
                 official = dataset[row][video_key].permute(1, 2, 0).numpy()
                 if not np.array_equal(official, arrays[(video_key, row)]):
@@ -191,7 +238,8 @@ def prepare(cfg, out):
     manifest = {'config': cfg, 'splits': splits, 'frames': len(eps), 'train_frames': len(train_rows),
                 'validation_rows': validation_rows, 'tasks': task_names.tolist(),
                 'train_frames_by_task': {task_names[i]: int((task_index[train_rows] == i).sum()) for i in range(len(task_names))},
-                'trimmed_tail_frames': trimmed, 'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept & human).sum()),
+                'trimmed_tail_frames': trimmed, **({'trimmed_head_frames': trimmed_head} if trim_head else {}),
+                'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept & human).sum()),
                 'policy_frames_excluded': int((~human).sum()),
                 'correction_train_frames': len(correction_rows), 'correction_repeat': cfg.get('correction_repeat', 1),
                 'sampled_rows': len(sampled_rows),
@@ -214,7 +262,7 @@ class Frames:
     def __init__(self, out, cfg):
         self.data = {k: v for k, v in np.load(out / 'data.npz').items()}
         self.camera_map = camera_map(cfg)
-        self.streams = {key: (out / cache_name(video_key)).open('rb') for key, video_key in self.camera_map.items()}
+        self.streams = {key: cache_path(cfg, out, video_key).open('rb') for key, video_key in self.camera_map.items()}
         # A fixed config task (experiment 1) or each frame's own dataset task.
         self.task = cfg.get('task')
 
@@ -245,7 +293,7 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
     from safetensors.torch import save_file
 
     prepared = json.loads((out / 'prepared.json').read_text())
-    if prepared['config'] != cfg or prepared['partition_sha256'] != sha(cfg['partition']):
+    if prepared_identity(prepared['config']) != prepared_identity(cfg) or prepared['partition_sha256'] != sha(cfg['partition']):
         raise ValueError('Prepared data/config identity differs')
     if (out / 'progress.json').exists() and not smoke and not resume:
         raise ValueError('Training already exists; preserve it instead of overwriting')
@@ -264,6 +312,15 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
     policy.config.input_features = {k: v for k, v in policy.config.input_features.items()
                                     if k in ['observation.state', *cameras]}
     policy.config.empty_cameras = 0
+    if cfg.get('train_vlm'):
+        # Full fine-tuning (experiment 4): vision encoder, connector and language model train too. LeRobot's own
+        # non-expert-only rule still freezes the parameters that get no gradient (last VLM layer, its final norm, lm_head).
+        model = policy.model.vlm_with_expert
+        policy.config.train_expert_only = model.train_expert_only = False
+        policy.config.freeze_vision_encoder = model.freeze_vision_encoder = False
+        for p in model.vlm.parameters():
+            p.requires_grad = True
+        model.set_requires_grad()
     if cfg.get('init_weights'):
         # Continue from an earlier fine-tuned checkpoint of the same structure (fresh optimizer and schedule).
         from safetensors.torch import load_file
@@ -283,12 +340,18 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
     else:
         frames = Frames(out, cfg)
     parameters = [(n, p) for n, p in policy.named_parameters() if p.requires_grad]
-    if any('.vlm.' in n for n, _ in parameters):
-        raise ValueError('VLM unexpectedly trainable')
+    vlm_parameters = [n for n, _ in parameters if '.vlm.' in n]
+    if bool(vlm_parameters) != bool(cfg.get('train_vlm')):
+        raise ValueError('VLM trainability differs from train_vlm')
+    if cfg.get('train_vlm') and not (any('.vision_model.' in n for n in vlm_parameters) and any('.connector.' in n for n in vlm_parameters)
+                                     and any('.text_model.layers.' in n for n in vlm_parameters)):
+        raise ValueError('train_vlm left the vision encoder, connector or language layers frozen')
     trained_layers = sorted({int(n.split('.layers.')[1].split('.')[0]) for n, _ in parameters if 'lm_expert.layers.' in n})
     assert trained_layers == list(range(16))
     (out / 'trainable.json').write_text(json.dumps({'names': [n for n, _ in parameters],
         'parameters': sum(p.numel() for _, p in parameters), 'expert_layers': trained_layers,
+        'vlm_parameters': sum(p.numel() for n, p in parameters if '.vlm.' in n),
+        'frozen_names': [n for n, p in policy.named_parameters() if not p.requires_grad],
         'model_source_sha256': sha(Path(cfg['model_dir']) / 'model.safetensors'),
         'init_weights_sha256': sha(cfg['init_weights']) if cfg.get('init_weights') else None}, indent=2) + '\n')
     if goal_cfg:
@@ -444,6 +507,12 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
                 raise RuntimeError('Frozen weights have gradients')
             audit = {'stage': 'gradient_audit', 'all_16_expert_layers_positive': True,
                      'per_layer_gradient_l1': stage_grads, 'frozen_gradients_absent': True}
+            if cfg.get('train_vlm'):
+                missing = [n for n, p in parameters if '.vlm.' in n and (p.grad is None or float(p.grad.abs().sum()) <= 0)]
+                if missing:
+                    raise RuntimeError(f'Trainable VLM parameters without gradient: {missing[:10]} ({len(missing)} total)')
+                audit['vlm_gradient_l1'] = {part: sum(float(p.grad.abs().sum()) for n, p in parameters if part in n)
+                                            for part in ('.vision_model.', '.connector.', '.text_model.')}
             if goal_cfg:
                 # With the zero-initialised output layer, only that layer (and the null embedding) receives
                 # gradient at step 1; the input layer starts learning once the output weights are non-zero.
