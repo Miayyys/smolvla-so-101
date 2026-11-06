@@ -202,3 +202,59 @@ uv cache prune                   # 清理缓存中不再使用的包
 | 串口 `Permission denied` | 用户需在 `uucp` 组（已在） |
 | `OpenCVCamera(...) read thread is not running.`（测试/录制中途崩溃） | 相机在 USB 上掉线了（`journalctl -k \| grep 'USB disconnect'` 可查）。2026-10-23 腕部相机（ZSKJ，接在 USB hub 上）8 分钟内掉线 3 次，之前录 200 段时一次没掉过。先把腕部相机线两头重新插紧、腕部转动处留够余量并固定；还掉就直接插电脑 USB 口，不经过 hub。崩溃前已完成的段会保存，正在录的那段也会被截断保存为最后一段；脚本问成功与否时，最后这段按 `s` 跳过 |
 | 某相机/串口找不到 | `ls /dev/serial/by-id/ /dev/v4l/by-id/` 检查是否插好；`source scripts/so101_env.fish` 会提示缺哪个 |
+
+## 10. GPU 服务器训练（实验四）
+
+服务器 `GPUServer`（ssh 配置在 `~/.ssh/config`，已用密钥登录）：RTX 4090 24 GB，有卡时内存 90 GB。系统盘 30 GB，数据盘 `/root/sj-tmp` 50 GB；`/dev/shm` 上限 45 GB，关机后清空。按量计费，不支持无卡开机，**关机前先把存档拉回本地**。
+
+上传（本机 fish；只传代码、数据集、原模型、tokenizer 和实验二的归一化统计量，约 6 GB）：
+
+```fish
+cd ~/Study/so101-vla-edge
+set DST /root/sj-tmp/so101-vla-edge
+ssh GPUServer "apt-get update && apt-get install -y rsync && mkdir -p $DST"
+git ls-files -co --exclude-standard | rsync -av --files-from=- ./ GPUServer:$DST/    # 代码（含未提交的文件）
+rsync -avP --relative ./artifacts/smolvla_base ./artifacts/transfer/smolvlm2_assets \
+    ./artifacts/datasets/so101_pilot_v3 ./runs/so101_pilot_v2/stats.json GPUServer:$DST/
+```
+
+服务器上（bash）：
+
+```bash
+cd /root/sj-tmp/so101-vla-edge
+nvidia-smi; df -h /dev/shm                                      # 4090、驱动 ≥ 525；/dev/shm 要能放下 33 GB
+.venv/bin/python -m so101vla.train --config configs/so101_full_v4.json --stage prepare   # 顶视缓存写到 /dev/shm/so101_full_v4
+.venv/bin/python -m so101vla.train --config configs/so101_full_v4.json --stage smoke     # 2 步，看显存和速度
+PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True nohup .venv/bin/python -m so101vla.train --config configs/so101_full_v4.json --stage train > runs/so101_full_v4/train.log 2>&1 &
+# 续训：先重跑 prepare（若 /dev/shm 已清空），再同一条命令加 --resume，日志用 >> 追加
+tail -f runs/so101_full_v4/train.log
+```
+
+- 4090 上 batch 32 × 2 显存不足，配置已是 16 × 4（显存峰值 22.2 GiB / 23.5 GiB）。正式训练开始后配置不能再改，否则不能续训。
+- 重新开机后 `/dev/shm` 已空：先重跑 `--stage prepare`（只重建缓存；数据与之前逐字节相同），再 `--stage train --resume`。
+- **服务器上不用 `uv sync`/`uv run`，直接用 `.venv/bin/python`**：`uv.lock` 记的是官方下载地址，服务器访问 PyPI 官方源只有约 24 KB/s，`uv run` 会按锁文件重新同步。环境已于 2026-10-25 装好（`.venv` 6.5 GB，脚本 `/root/sj-tmp/server_env.sh`）：本机 `uv export --frozen --format requirements-txt --no-emit-project` 导出带哈希的依赖清单 → 服务器 `uv venv --python 3.12`（Python 从 npmmirror 下）→ `uv pip install --require-hashes`，PyPI 包走腾讯镜像，torch cu118 走阿里云 `pytorch-wheels`。哈希校验保证每个文件与 `uv.lock` 相同。依赖变了要重新导出、重装。
+- 服务器测速（2026-10-25，各约 20 s）：腾讯/华为/中科大 PyPI 约 7.5 MB/s（中科大并发下载返回 429），清华 4.6，阿里云 pytorch-wheels 6.5，download.pytorch.org 1.2，GitHub 不通。
+- 服务器没有 sftp，`scp` 不能用；传单个文件用 `ssh GPUServer 'cat > 目标路径' < 本地文件`，目录用 rsync。
+
+实验四第二阶段（`configs/so101_full_v5.json`，从第一阶段 best 继续训练 5000 步）：步骤同上，命令里的 v4 换成 v5。如果服务器是新开的，或者数据盘已经清空，还要多传一个初始权重：
+
+```fish
+rsync -avP --relative ./runs/so101_full_v4/best/model.safetensors GPUServer:$DST/
+```
+
+训练结束后自动存网盘并关机：正式训练启动以后再开（启动前开，会因为找不到训练进程而直接判为 DIED）：
+
+```bash
+nohup scripts/server_autoshutdown.sh so101_full_v5 > /root/sj-tmp/autoshutdown_so101_full_v5.nohup 2>&1 < /dev/null &
+cat /root/sj-tmp/autoshutdown_so101_full_v5.log
+```
+
+- 关机接口的地址和 token 存在服务器的 `/root/sj-tmp/.suanjia_shutdown_url`、`.suanjia_token` 里（chmod 600，不进 git）。**token 会变**（11-03 旧 token 返回 `401 No Token`），每次开机训练前都要从平台复制最新的关机指令，更新这两个文件：`printf '%s\n' '<token>' | ssh GPUServer 'umask 077; cat > /root/sj-tmp/.suanjia_token'`。
+- 实验四第二阶段结束时只调用了一次关机接口，平台维护期间返回 `502 Bad Gateway`，服务器一直开着，导致欠费。现在要求 HTTP 200 并且返回实例信息才算成功，否则每 2 分钟重试，最多 2 小时。
+- 网盘维护期间网页下载可能中断（实验四第二阶段的 `model.safetensors` 只下到 64 KB）。这种情况直接从数据盘拉，见下。
+
+拉回存档（本机 fish，训练中每次存档后都可以拉）：
+
+```fish
+rsync -avP --exclude '*.jpeg.bin' GPUServer:/root/sj-tmp/so101-vla-edge/runs/so101_full_v4 runs/
+```
