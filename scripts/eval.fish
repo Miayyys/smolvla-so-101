@@ -5,8 +5,10 @@
 #   fish scripts/eval.fish -n rollout_key_v1_best -t "Put the key in the white box." [-p runs/so101_key_v1/best] [-e 10] [-s 40] [-r 600] [--smooth sigma=2, 0 = off] [--rtc] [--resume] [--dry-run]
 #
 # No leader arm: between episodes the follower returns (1 s) to the pose it had when the script started and holds it
-# while you rearrange the objects, so start with the arm in the same rest pose used when recording demos.
-# Keys as in record.fish: n ends the episode / reset early, r re-runs the episode, q stops (finished episodes are saved).
+# while you rearrange the objects. Experiment 4's models stall at the demo rest pose (they learned to wait there), so
+# start from a fixed pose turned away from it (shoulder_pan ~50 deg, arm folded) and keep it for the whole test.
+# Keys as in record.fish: n ends the episode / reset early, r re-runs the episode, q (or Esc) stops (finished episodes are
+# saved). Each episode start prints "第 k / N 段"; the terminal output is also saved to runs/real_eval/<name>.log.
 # The policy was trained with top -> camera1 and wrist -> camera2, hence the rename map.
 # Default inference is sync: the arm waits ~0.18 s for each new 50-step chunk. --rtc uses LeRobot's Real-Time Chunking:
 # a background thread replans once 30 actions are left and guides the new chunk to match the next 20 old actions
@@ -84,14 +86,22 @@ end
 
 set before 0
 test -f $root/meta/info.json; and set before (uv run --frozen python -c "import json,sys; print(json.load(open(sys.argv[1]))['total_episodes'])" $root/meta/info.json)
-$cmd
-set rc $status
+# Terminal output is also appended to runs/real_eval/<name>.log (keys still work: stdin stays the terminal).
+mkdir -p runs/real_eval
+set log runs/real_eval/$_flag_name.log
+echo "=== "(date -Iseconds)" $cmd" >>$log
+env PYTHONUNBUFFERED=1 $cmd 2>&1 | tee -a $log
+set rc $pipestatus[1]
+echo "=== exit $rc "(date -Iseconds) >>$log
 test -f $root/meta/info.json; or return $rc
 set after (uv run --frozen python -c "import json,sys; print(json.load(open(sys.argv[1]))['total_episodes'])" $root/meta/info.json)
 
 set csv runs/real_eval/$_flag_name.csv
 mkdir -p runs/real_eval
 test -f $csv; or echo 'episode,success,policy,task,time,note' >$csv
+# Also ask for episodes an earlier, interrupted run saved but never labelled (from the one after the last CSV row).
+set labelled (uv run --frozen python -c "import csv,sys; print(max([int(r['episode']) for r in csv.DictReader(open(sys.argv[1]))], default=-1) + 1)" $csv)
+test $labelled -lt $before; and set before $labelled
 # Keys typed while the recording shut down (space, n, ...) would otherwise be read as the first answer.
 python3 -c 'import termios; termios.tcflush(0, termios.TCIFLUSH)' 2>/dev/null
 echo "saved episodes $before.."(math $after - 1)"; mark each: y = success, n = failure, s = skip (not counted)"

@@ -88,8 +88,13 @@ end
 
 set before 0
 test -f $root/meta/info.json; and set before (uv run --frozen python -c "import json,sys; print(json.load(open(sys.argv[1]))['total_episodes'])" $root/meta/info.json)
-$cmd
-set rc $status
+# Terminal output is also appended to runs/dagger/<name>.log (keys still work: stdin stays the terminal).
+mkdir -p runs/dagger
+set log runs/dagger/$_flag_name.log
+echo "=== "(date -Iseconds)" $cmd" >>$log
+env PYTHONUNBUFFERED=1 $cmd 2>&1 | tee -a $log
+set rc $pipestatus[1]
+echo "=== exit $rc "(date -Iseconds) >>$log
 test -f $root/meta/info.json; or return $rc
 set after (uv run --frozen python -c "import json,sys; print(json.load(open(sys.argv[1]))['total_episodes'])" $root/meta/info.json)
 test $after -gt $before; or return $rc

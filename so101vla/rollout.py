@@ -77,6 +77,33 @@ def install_rtc_fixes():
     ActionQueue._check_and_resolve_delays = resolve_delay
 
 
+def install_episode_banner(total):
+    """Print a visible "episode k / total" line when each episode starts and ends (LeRobot only logs
+    "Recording episode <0-based dataset index>" among many INFO lines)."""
+    import re
+
+    from lerobot.rollout.strategies import episodic
+    from lerobot.utils import utils
+
+    first = []
+
+    def log_say(text, play_sounds=True, blocking=False):
+        original(text, play_sounds, blocking)
+        m = re.fullmatch(r'Recording episode (\d+)', text)
+        if m:
+            index = int(m.group(1))
+            first[:] = first or [index]
+            print(f'\n========== 第 {index - first[0] + 1} / {total} 段（数据集第 {index} 段）：开始 ==========\n', flush=True)
+        elif text == 'Reset the environment':
+            print('\n---------- 本段结束：摆放物体后按 n 开始下一段 ----------\n', flush=True)
+        elif text == 'Re-record episode':
+            print('\n---------- 重录本段 ----------\n', flush=True)
+
+    original = utils.log_say
+    # episodic.py imported log_say at module level; correction.py imports it from lerobot.utils.utils when it runs
+    episodic.log_say = utils.log_say = log_say
+
+
 def main():
     sigma, args = 0.0, []
     for arg in sys.argv[1:]:
@@ -91,6 +118,9 @@ def main():
     install_rtc_fixes()
     from so101vla import correction
     correction.install()
+    total = next((a.split('=', 1)[1] for a in args if a.startswith('--dataset.num_episodes=')), None)
+    if total:
+        install_episode_banner(total)
     from lerobot.scripts.lerobot_rollout import main as rollout_main
     rollout_main()
 
