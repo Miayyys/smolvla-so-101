@@ -258,3 +258,32 @@ cat /root/sj-tmp/autoshutdown_so101_full_v5.log
 ```fish
 rsync -avP --exclude '*.jpeg.bin' GPUServer:/root/sj-tmp/so101-vla-edge/runs/so101_full_v4 runs/
 ```
+
+## 11. RK3588 端侧（支线，2026-11-07 停在这里）
+
+记录见 [experiments/edge-rk3588.md](experiments/edge-rk3588.md)。板子用 `ssh root@10.42.0.252` 登录，不能上网，工作目录在 `/userdata/so101`（根分区很小，不要往 `/root` 和 `/dev/shm` 放模型）。
+
+PC 端转换环境（只需建一次；Toolkit2 2.3.2 要求 torch≤2.4、numpy≤1.26，和主环境冲突；onnx 必须是 1.16.1）：
+
+```fish
+uv venv .venv-rknn --python 3.12
+uv pip install --python .venv-rknn/bin/python torch==2.4.0 --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv-rknn/bin/python rknn-toolkit2==2.3.2 "onnx==1.16.1"
+```
+
+导出、编译、上传、测速：
+
+```fish
+uv run python -m so101vla.rknn_export --model-dir runs/so101_full_v5/best --output runs/rknn_v5      # 默认改写图、16 个语言位
+.venv-rknn/bin/python -I scripts/rknn_compile.py --root runs/rknn_v5 --dtypes fp16 int8 > runs/rknn_v5/compile.log 2>&1
+ssh root@10.42.0.252 'mkdir -p /userdata/so101/rknn_v5/rknn'
+rsync -a runs/rknn_v5/rknn/*.rknn root@10.42.0.252:/userdata/so101/rknn_v5/rknn/
+rsync -a runs/rknn_v5/test root@10.42.0.252:/userdata/so101/rknn_v5/
+rsync -a scripts/board_bench.py scripts/board_profile.py scripts/rknn_capi.py root@10.42.0.252:/userdata/so101/
+ssh root@10.42.0.252 'cd /userdata/so101 && PYTHONPATH=board_env/python_site python3 board_bench.py --root rknn_v5 \
+    --vision fp16 --prefix fp16 --expert int8 --kv-resident --vision-parallel --out rknn_v5/report.json'
+```
+
+- `board_bench.py` 的默认设置是视觉三核，prefix 和专家单核。**prefix 和专家在三核下算出的结果是错的**。
+- 逐算子耗时：`board_profile.py --root rknn_v5 --module expert --variant int8 --core 0 --out prof.txt`（4 维输入的数值不对，只能用来看耗时）。
+- 板端 Python 一定要带 `PYTHONPATH=board_env/python_site`，系统 Python 里没有 numpy 和 rknnlite。

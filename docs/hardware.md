@@ -33,3 +33,17 @@
 对录制与部署的影响：LeRobot 0.6.1 的 `so101_follower.get_observation()` 用 `read_latest()`（不阻塞，取后台线程最新帧），所以 20 fps 相机不会拖慢 30 Hz 控制/录制循环；代价是按 30 Hz 存的顶视帧约 1/3 与上一帧重复，图像最旧约 50 ms（30 fps 相机约 33 ms）。部署时策略只在每个动作块开始时取图，20 fps 足够。训练与部署须用同一相机与设置。
 
 选用 1280×720（26.5 fps）：它是传感器原生 16:9 全幅（与 640×480 同垂直视野，左右更宽；640×480 为左右裁切），30 Hz 录制时重复帧约 12%（640×480 约 33%），图像最旧约 38 ms。MJPG 约 209 KB/帧，笔记本解码 3.1 ms/帧（640×480 为 73 KB、1.1 ms）。与腕部 640×480 同时采集实测 26.5 / 30.0 fps。该模式驱动只声明 31 fps 一档（帧间隔 0.032 s），LeRobot `OpenCVCamera._validate_fps` 要求请求值与驱动返回值相等，故相机配置写 `fps: 31`；相机 fps 只用于打开设备时设置/校验，录制与数据集帧率另由 `--dataset.fps`（30）决定。注意：更宽的视野里会拍到主臂和桌边杂物，录制时应把主臂和人手移出顶视画面，避免模型学到主臂动作（部署时没有）。
+
+## RK3588 开发板（端侧支线，2026-11-06 接入）
+
+| 项目 | 情况 |
+|---|---|
+| 型号与系统 | LZAMP RK3588S，Ubuntu 22.04，内核 6.12 |
+| CPU | 7 个核在线：0–2 是 A55（1.8 GHz），3–6 是 A76（2.3 GHz） |
+| NPU | 3 核，驱动 0.9.8，频率最高 1 GHz；`librknnrt` 2.3.2 |
+| 内存 | 3.8 GB，没有 swap；`/dev/shm` 1.9 GB，占用的也是内存 |
+| 存储 | 根分区 14 GB（11-06 清理后剩 6 GB）；`/userdata` 15 GB，工作目录 `/userdata/so101` |
+| 连接 | `ssh root@10.42.0.252`（密钥登录），传输约 86 MB/s；板子不能上网，安装包都要从电脑拷过去 |
+| Python | 系统 Python 3.10，里面没有 numpy；板端环境 `/userdata/so101/board_env/python_site`（rknn-toolkit-lite2 2.3.2、numpy 1.26.4、psutil、tokenizers），另有 QVLA 打过补丁的 RKLLM 1.3.1（`board_env/rkllm_patched/`） |
+
+11-06 清理时删除了 QVLA 时期的 `/root/qvla_board_test`（LIBERO 模型和测速包，5.4 GB），其中的测量结果已备份到 `runs/qvla_board_leftover/board_results.tar.gz`。
