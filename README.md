@@ -1,10 +1,11 @@
 # so101-vla-edge
 
-本科毕设项目：低成本 SO-101 机械臂上 VLA 策略（SmolVLA）的端侧（RK3588）量化部署，以闭环任务成功率作为量化效果的评价指标。
+本科毕设项目：低成本 SO-101 机械臂上的 VLA 策略（SmolVLA）。原定方向是端侧（RK3588）量化部署，2026-11-07 起端侧改为支线，单独记录在分支 `edge-rk3588`（记录 `docs/experiments/edge-rk3588.md`，代码和命令也在该分支）；主线转向 real2sim2real：扫描真实场景重建数字孪生，在孪生里生成数据训练，再部署回真机（见 [plan.md](docs/plan.md)"路线决定：2026-11-07"）。仓库名沿用原来的。
 
 - 常用命令（环境、标定、遥操作、录制、回放）：[docs/commands.md](docs/commands.md)
 - 真机硬件与相机实测：[docs/hardware.md](docs/hardware.md)
 - 计划与里程碑：[docs/plan.md](docs/plan.md)
+- 真机实验记录：[docs/experiments/](docs/experiments/)（实验一至四）
 - 仿真预研（SO101 MuJoCo 抓放：脚本专家数据、基线、DAgger、目标条件化结构、评测方法）：[docs/prestudy-sim/](docs/prestudy-sim/)
 - 预研产物索引：[docs/prestudy-sim/so101-artifacts.md](docs/prestudy-sim/so101-artifacts.md)
 
@@ -53,7 +54,7 @@ uv run python -m so101vla.scripted --config configs/so101_scripted_full_v2.json 
 
 加依赖用 `uv add <包>`（会同时更新 `pyproject.toml` 与 `uv.lock`）。LeRobot 命令（`lerobot-find-port`、`lerobot-calibrate`、`lerobot-teleoperate`、`lerobot-record`、`lerobot-train` 等）用 `uv run lerobot-...` 调用，不另建 LeRobot 环境。
 
-系统 FFmpeg 为 9.x，torchcodec 0.11 只支持 FFmpeg 4–8、加载失败，LeRobot 自动退回 pyav 解码（录制编码本来就用 pyav），功能正常，仅解码较慢；2026-10-21 实测本地 `svla_so100_pickplace` 经 pyav 正常读取。RKNN-Toolkit2 等与上面版本冲突的工具链将来单独建环境。
+系统 FFmpeg 为 9.x，torchcodec 0.11 只支持 FFmpeg 4–8、加载失败，LeRobot 自动退回 pyav 解码（录制编码本来就用 pyav），功能正常，仅解码较慢；2026-10-21 实测本地 `svla_so100_pickplace` 经 pyav 正常读取。RKNN-Toolkit2 等与上面版本冲突的工具链单独建环境（端侧支线用的 `.venv-rknn`，说明在分支 `edge-rk3588` 的 `docs/commands.md` 第 11 节）。
 
 仿真预研的模型与数据已删除（2026-10-19），`runs/so101_*`、`runs/so100_*` 只保留文本结果，见 [docs/prestudy-sim/so101-artifacts.md](docs/prestudy-sim/so101-artifacts.md)。
 
