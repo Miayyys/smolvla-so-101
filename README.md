@@ -4,6 +4,7 @@
 
 - 常用命令（环境、标定、遥操作、录制、回放）：[docs/commands.md](docs/commands.md)
 - 真机硬件与相机实测：[docs/hardware.md](docs/hardware.md)
+- 相机与机械臂标定（方法、结果）：[docs/calibration.md](docs/calibration.md)
 - 计划与里程碑：[docs/plan.md](docs/plan.md)
 - 真机实验记录：[docs/experiments/](docs/experiments/)（实验一至四）
 - 仿真预研（SO101 MuJoCo 抓放：脚本专家数据、基线、DAgger、目标条件化结构、评测方法）：[docs/prestudy-sim/](docs/prestudy-sim/)
