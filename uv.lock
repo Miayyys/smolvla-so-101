@@ -1019,6 +1019,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pycolmap"
+version = "4.2.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "numpy" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/1c/a3a80bb2a2b705b2e94074498fcd8a9de031f16a14fedaeb9a3628e7abb0/pycolmap-4.2.1-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:1cacb57103909bb0adec666b06122add8ea8024682d83fc5903145e01297f243", size = 20785309, upload-time = "2026-09-29T17:04:33.333Z" },
+    { url = "https://files.pythonhosted.org/packages/a5/9a/a76e54e33730eceecb5da7eca38ad939cd6c69633339b3a53cf7299f7ea9/pycolmap-4.2.1-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:711cef7bd0d30326a5d75967043371c98667f24db305b8cd5cd19339d02a7073", size = 38191187, upload-time = "2026-09-29T17:04:38.813Z" },
+    { url = "https://files.pythonhosted.org/packages/80/ab/bc60b841c8be56354bfad1b4c7b1f9b15ba92e4f2285f394b3a5dbaa27c7/pycolmap-4.2.1-cp312-cp312-win_amd64.whl", hash = "sha256:b6a562b33bcbf0757c7b28c33b9166e095fa5451f9a4b38236018cf8a8d49380", size = 23973043, upload-time = "2026-09-29T17:04:42.469Z" },
+]
+
+[[package]]
 name = "pygments"
 version = "2.21.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1215,6 +1228,7 @@ dependencies = [
     { name = "lerobot", extra = ["dataset", "feetech", "smolvla", "viz"] },
     { name = "mujoco" },
     { name = "numpy" },
+    { name = "pycolmap" },
     { name = "torch" },
     { name = "torchvision" },
     { name = "transformers" },
@@ -1226,6 +1240,7 @@ requires-dist = [
     { name = "lerobot", extras = ["smolvla", "dataset", "feetech", "viz"], specifier = "==0.6.1" },
     { name = "mujoco", specifier = "==3.8.1" },
     { name = "numpy", specifier = "==2.2.6" },
+    { name = "pycolmap", specifier = ">=4.2.1" },
     { name = "torch", specifier = "==2.7.1", index = "https://download.pytorch.org/whl/cu118" },
     { name = "torchvision", specifier = "==0.22.1", index = "https://download.pytorch.org/whl/cu118" },
     { name = "transformers", specifier = "==5.5.4" },
