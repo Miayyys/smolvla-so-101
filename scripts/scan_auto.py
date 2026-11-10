@@ -71,7 +71,8 @@ GRIPPER_MOVE_S = 0.8
 class Checker:
     """Validity of arm poses given in LeRobot units (five joints in degrees)."""
 
-    def __init__(self, states):
+    def __init__(self, states, boxes=()):
+        """boxes: extra obstacles on the table as (centre, half sizes) in metres, base frame."""
         extrinsics = json.loads(Path(scan.EXTRINSICS).read_text())
         self.offsets = np.array([extrinsics['joint_offset_deg'][j] for j in top.JOINTS])
         self.kp = json.loads(Path(ACTUATORS).read_text())['params']['kp']
@@ -81,14 +82,21 @@ class Checker:
         table.size = [2, 2, 0.01]
         table.pos = [0, 0, TABLE_CLEARANCE_M]
         table.contype = table.conaffinity = 1
+        for index, (centre, half) in enumerate(boxes):
+            box = spec.worldbody.add_geom()
+            box.name = f'obstacle_{index}'
+            box.type = mujoco.mjtGeom.mjGEOM_BOX
+            box.size, box.pos = list(half), list(centre)
+            box.contype = box.conaffinity = 1
         self.model = spec.compile()
+        self.boxes = {mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, f'obstacle_{i}') for i in range(len(boxes))}
         self.data = mujoco.MjData(self.model)
         low, high = self.model.jnt_range[5]
         self.gripper = low + GRIPPER_OPEN_PCT / 100 * (high - low)
         self.states = states[:, :4]
 
-    def contacts(self, q):
-        """Number of table contacts at the pose the arm reaches when commanded to q, sag included."""
+    def contacts(self, q, boxes_only=False):
+        """Number of table (or only obstacle box) contacts at the pose the arm reaches when commanded to q, sag included."""
         m, d = self.model, self.data
         d.qpos[:5] = np.radians(q[:5] + self.offsets)
         d.qpos[5] = self.gripper
@@ -96,6 +104,8 @@ class Checker:
         mujoco.mj_forward(m, d)
         d.qpos[:5] -= d.qfrc_bias[:5] / self.kp
         mujoco.mj_forward(m, d)
+        if boxes_only:
+            return sum(c.geom1 in self.boxes or c.geom2 in self.boxes for c in d.contact[:d.ncon])
         return sum(m.geom_bodyid[c.geom1] == 0 or m.geom_bodyid[c.geom2] == 0 for c in d.contact[:d.ncon])
 
     def near_demonstrations(self, q):

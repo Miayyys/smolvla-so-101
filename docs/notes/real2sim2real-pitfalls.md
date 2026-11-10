@@ -158,6 +158,47 @@ CUDA_HOME=/opt/cuda PATH=/opt/cuda/bin:$PATH NVCC_APPEND_FLAGS='-std=c++20 -w' u
 - **晚上的扫描（`runs/scan/table_auto`）。** 【本项目】COLMAP 只注册 2 张，改用 `recon_table.py transfer` 沿用白天的位姿，按实测关节修正，匹配 180/260 张。留出 PSNR 18.0 dB，去掉影子和反光后 21.9 dB，纹理比白天模糊（单帧、噪声大）。
 - **示教的光照变化很大。** 【本项目】顶视木板亮度 34–94（5%–95% 分位），中位 50，大部分示教接近晚上（43），下午扫描（106）比 95% 的示教都亮。所以不追求固定光照：两套外观 + 亮度颜色扰动，真机三组在同一时段交替测试，v5 基线建议晚上测。
 
+## 孪生渲染拼接（2026-11-09，第一版）
+
+`scripts/twin_render.py`（`.venv-gs`）的 `Twin` 类输出腕部和顶视画面，结果对比图在 `runs/twin/check_day`、`check_night`。腕部：桌面纹理 + 背景 3DGS，按相机畸变变形，再叠夹爪层。顶视：空桌实拍 + 手臂 3DGS。
+
+| | 腕部整图 | 腕部夹爪区 | 腕部场景 | 顶视整图 |
+|---|---|---|---|---|
+| 白天 | 19.8 dB | 18.6 dB | 20.5 dB | 21.6 dB |
+| 晚上 | 17.9 dB | 19.2 dB | 17.7 dB | 25.0 dB |
+
+- **几何都对得上。** 【本项目】木条边缘、台灯底座和夹爪位置和实拍基本重合。
+- **PSNR 里影子和反光占了很大一部分。** 【本项目】模型有意不含这些，不能单独用这个数判断孪生好坏。
+- **夹爪层偏亮、偏平。** 【本项目】增益只能用少量中间亮度的像素估计（白天 2.2–2.6 倍），白色部分放大后接近饱和，看不到肋纹，黑色部分也丢了细节。
+- **顶视右下角的亮区和实拍不同。** 【本项目】手臂数据是傍晚拍的，有新的反光，属于光照差异，不是拼接问题。
+
+## 物体外观（钥匙串）
+
+```
+python scripts/scan_object.py --top $TOP --wrist $WRIST --port $FOLLOWER --source runs/scan/table_curtain --out runs/scan/key
+python scripts/recon_table.py transfer --scan runs/scan/key --source runs/scan/table_curtain
+python scripts/recon_object.py --scan runs/scan/key --source runs/scan/table_curtain
+.venv-gs/bin/python scripts/twin_render.py --scan runs/scan/table_curtain --arm runs/scan/table_curtain/arm --out runs/twin/check_key --object runs/scan/key
+```
+
+- **拍摄只用工作区扫描已验证过的位姿和路径。** 【本项目】顶视相机找到物体，再从扫描计划里选出能完整看到它的位姿（42 个，约 3 分钟）。物体作为高 2 cm、外扩 1.5 cm 的障碍物重新检查路径，碰到它的路径一律去掉。
+- **离开收起姿态那段录制路径只查和物体的接触。** 【本项目】模型在收起姿态本来就报告和桌面接触，所以这段路径一直没有做桌面检查。
+- **位姿直接继承工作区扫描的精修位姿（`transfer`）。** 【本项目】42 张里有 32 张匹配上，物体和桌面纹理因此在同一坐标系，融合出来的钥匙齿和钢丝都清楚。
+- **桌面纹理 `table.npz` 存的是 RGB。** 【本项目】一开始当成 BGR 读，木条变成了蓝色。
+- **透明度要在工作区扫描的亮度单位下算，增益要按位置估计。** 【本项目】晚上拍摄时整体增益是 B 0.40、G 0.57、R 0.69，而且各处不一样（灯光和白天的窗光分布不同）。用一个全局增益时，黑色钥匙头被漏掉，周围大片垫子又被误判为物体。改成在物体周围的空桌面上测比例，再用归一化卷积平滑延伸到物体下方。
+- **不要把外轮廓整个填满。** 【本项目】钢丝和钥匙围成的一块垫子会被当成物体。现在只填小于 1 cm² 的封闭孔，内部全不透明，只在边缘一两格保留半透明。
+- **盒子（白色开口托盘，9×9×2.2 cm，壁厚 1.7 mm）用测量的几何建模，不做透明贴图。** 【本项目】
+  ```
+  python scripts/scan_object.py ... --out runs/scan/box --name box --height 0.022 --visible 0.6
+  python scripts/recon_table.py transfer --scan runs/scan/box --source runs/scan/table_curtain
+  python scripts/recon_box.py --scan runs/scan/box --source runs/scan/table_curtain --size 0.09 --height 0.022 --wall 0.0017
+  .venv-gs/bin/python scripts/twin_render.py ... --out runs/twin/check_box --object runs/scan/box
+  ```
+  障碍物高度为物体高度加 1.5 cm。只要求看到 60% 的轮廓，这样能拿到 52 个视角，侧壁也有贴图。只有背对底座的外壁始终拍不到，用中值颜色填充。
+- **顶视相机和腕部（COLMAP）坐标系之间相差约 1 cm。** 【本项目】顶视估计的盒子尺寸是 89.5×89.3 mm（实际 90），说明顶视标定本身没问题。但腕部轮廓对齐后，盒子位置移动了 10.4 mm。孪生的腕部画面用的是腕部坐标系，之后要在顶视画面里渲染物体时，需要先处理这个偏差。
+- **盒子在腕部画面里基本是过曝的纯白。** 【本项目】曝光按垫子亮度锁定，和演示时一致，所以过曝是真实情况，不需要修正。
+- **晚上的腕部画面有台灯高光和手臂硬阴影。** 【本项目】垫子上有一块随视角移动的亮斑，还有清楚的手臂影子，白天孪生里两者都没有。演示大多接近晚上的亮度，这个差异可能比钥匙本身更重要。
+
 ## 工具待确认
 
 - Re3Sim（基于 Isaac Sim）和 GSWorld 有代码链接，仓库内容还没打开确认。
