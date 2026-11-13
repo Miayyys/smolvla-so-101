@@ -3,8 +3,10 @@
     .venv-gs/bin/python scripts/twin_render.py --scan runs/scan/table_curtain --arm runs/scan/table_curtain/arm --out runs/twin/check_day
 
 Wrist view: the table texture and background splats are rendered as a pinhole image, warped to the camera's distortion,
-and the jaws are laid over them. Top view: the arm's splats over a photograph of the empty workspace. The command
-compares renders with held-out photographs.
+and the jaws are laid over them. Top view: the arm's splats over a photograph of the empty workspace. Objects are placed
+by their 4 x 4 pose in the base frame and drawn in both views, nearest in front: a box from its face textures
+(recon_box.py), an object with height from its splats (recon_object3d.py), a flat one from its texture
+(recon_object.py). The command compares renders with held-out photographs.
 """
 
 import argparse
@@ -28,6 +30,8 @@ HOLD_OUT_EVERY = 8
 JAW_REFERENCE_OPENING = 39.6  # the opening used for the workspace scans
 SATURATED = 200
 DARK = 30
+LIGHT = np.array([0.3, 0.2, 1.0])  # direction towards the light, base frame, for generated objects
+AMBIENT = 0.55
 
 
 def median_background(directory):
@@ -105,23 +109,25 @@ class Twin:
         self.objects[meta['name']] = {'kind': 'box', 'meta': meta, 'textures': textures}
         return meta['name'], meta['pose']
 
-    def box_layer(self, camera, name, x, y, yaw):
-        """Colour (RGB) and coverage of a box placed with the centre of its base at (x, y) on the table, turned by yaw."""
-        item = self.objects[name]
-        meta = item['meta']
-        size, height, wall = meta['size_m'], meta['height_m'], meta['wall_m']
-        box_from_base = torch.tensor(np.linalg.inv(recon_box.base_from_box(x, y, yaw, self.layer[0].cpu().numpy())),
-                                     dtype=torch.float32, device=self.device)
-        u, v = torch.meshgrid(torch.arange(self.width, device=self.device), torch.arange(self.height, device=self.device),
-                              indexing='xy')
+    def rays(self, camera, K, width, height):
+        """Origin and per-pixel rays (base frame, scaled so that the distance along a ray is the camera depth)."""
+        u, v = torch.meshgrid(torch.arange(width, device=self.device), torch.arange(height, device=self.device), indexing='xy')
         pixels = torch.stack([u, v, torch.ones_like(u)], -1).float().reshape(-1, 3)
         pose = torch.inverse(camera[0])
-        rays = (pose[:3, :3] @ torch.linalg.inv(self.wrist_K[0]) @ pixels.T).T
+        return pose[:3, 3], (pose[:3, :3] @ torch.linalg.inv(K[0]) @ pixels.T).T
+
+    def box_layer(self, camera, name, pose, K, width, height):
+        """Colour (RGB), coverage and depth of a box whose base centre has the pose (4 x 4, base frame)."""
+        item = self.objects[name]
+        meta = item['meta']
+        size, wall = meta['size_m'], meta['wall_m']
+        box_from_base = torch.tensor(np.linalg.inv(pose), dtype=torch.float32, device=self.device)
+        start_point, rays = self.rays(camera, K, width, height)
         rays = rays @ box_from_base[:3, :3].T
-        origin = box_from_base[:3, :3] @ pose[:3, 3] + box_from_base[:3, 3]
+        origin = box_from_base[:3, :3] @ start_point + box_from_base[:3, 3]
         best = torch.full((len(rays),), float('inf'), device=self.device)
         colour = torch.zeros(len(rays), 3, device=self.device)
-        for k, (face, start, u_axis, v_axis, u_len, v_len) in enumerate(recon_box.faces(size, height, wall)):
+        for k, (face, start, u_axis, v_axis, u_len, v_len) in enumerate(recon_box.faces(size, meta['height_m'], wall)):
             start, u_axis, v_axis = (torch.tensor(np.asarray(a, np.float32), device=self.device) for a in (start, u_axis, v_axis))
             normal = torch.linalg.cross(u_axis, v_axis)
             facing = rays @ normal
@@ -135,36 +141,53 @@ class Twin:
             sampled = F.grid_sample(item['textures'][k], grid[None, None], align_corners=False)[0, :, 0].T
             colour = torch.where(ok[:, None], sampled, colour)
             best = torch.where(ok, t, best)
-        covered = torch.isfinite(best).float()[:, None]
-        return colour.reshape(self.height, self.width, 3), covered.reshape(self.height, self.width, 1)
+        covered = torch.isfinite(best).float()
+        return (colour.reshape(height, width, 3), covered.reshape(height, width, 1),
+                torch.where(covered > 0, best, torch.zeros_like(best)).reshape(height, width, 1))
+
+    def splat_layer(self, camera, name, pose, K, width, height):
+        """Colour (RGB, not premultiplied), alpha and depth of an object from recon_object3d.py at the pose."""
+        item = self.objects[name]
+        cam_from_object = camera @ torch.tensor(pose, dtype=torch.float32, device=self.device)[None]
+        rendered, alpha, _ = recon_gs.render(item['params'], cam_from_object, K, width, height, render_mode='RGB+ED')
+        alpha = alpha[0]
+        colour = rendered[0, ..., :3] / alpha.clamp(min=1e-4)
+        return colour.clamp(0, 1), alpha, rendered[0, ..., 3:]
 
     def load_object(self, directory):
-        """An object from recon_object.py. Its origin is the centre of its opaque part; placements move that point."""
-        if (Path(directory) / 'object/box.json').exists():
-            return self.load_box(directory)
-        meta = json.loads((Path(directory) / 'object/object.json').read_text())
-        texture = cv2.imread(str(Path(directory) / 'object/texture.png'), cv2.IMREAD_UNCHANGED).astype(np.float32) / 255
+        """An object scan; returns its name and its pose (4 x 4, base frame) while it was scanned."""
+        directory = Path(directory)
+        if (directory / 'object/box.json').exists():
+            name, placement = self.load_box(directory)
+            return name, recon_box.base_from_box(placement['x_m'], placement['y_m'], placement['yaw_rad'],
+                                                 self.layer[0].cpu().numpy())
+        meta = json.loads((directory / 'object/object.json').read_text())
+        if (directory / 'object/splats.pt').exists():
+            saved = torch.load(directory / 'object/splats.pt', weights_only=False)
+            self.objects[meta['name']] = {'kind': 'splats', 'meta': meta,
+                                          'params': {k: v.to(self.device) for k, v in saved['params'].items()}}
+            return meta['name'], np.asarray(saved['base_from_object'])
+        texture = cv2.imread(str(directory / 'object/texture.png'), cv2.IMREAD_UNCHANGED).astype(np.float32) / 255
         rows, columns = np.nonzero(texture[..., 3] > 0.5)
         centre = (meta['x0_m'] + rows.mean() * meta['cell_m'], meta['y0_m'] + columns.mean() * meta['cell_m'])
         rgba = np.dstack([texture[..., 2::-1], texture[..., 3:]])
         self.objects[meta['name']] = {'kind': 'flat', 'texture': torch.tensor(rgba, device=self.device).permute(2, 0, 1)[None],
                                       'meta': meta, 'centre': centre}
-        return meta['name'], centre
+        return meta['name'], recon_box.base_from_box(*centre, 0.0, self.layer[0].cpu().numpy())
 
-    def object_layer(self, camera, name, x, y, yaw):
-        """Colour (RGB) and alpha of an object placed with its origin at (x, y) on the table, turned by yaw (rad)."""
+    def flat_layer(self, camera, name, pose, K, width, height):
+        """Colour (RGB), alpha and depth of a flat object from recon_object.py whose origin has the pose; only the
+        position and the turn about z are used, the texture lies on the reconstructed table."""
+        x, y, yaw = pose[0, 3], pose[1, 3], np.arctan2(pose[1, 0], pose[0, 0])
         item = self.objects[name]
         meta, (cx, cy), texture = item['meta'], item['centre'], item['texture']
         a, b, c = (float(v) for v in self.layer[0])
         plane = torch.tensor([a, b, c + meta['height_above_table_m']], device=self.device)
-        u, v = torch.meshgrid(torch.arange(self.width, device=self.device), torch.arange(self.height, device=self.device),
-                              indexing='xy')
-        pixels = torch.stack([u, v, torch.ones_like(u)], -1).float()
-        pose = torch.inverse(camera[0])
-        rays = (pose[:3, :3] @ torch.linalg.inv(self.wrist_K[0]) @ pixels[..., None])[..., 0]
+        origin, rays = self.rays(camera, K, width, height)
+        rays = rays.reshape(height, width, 3)
         normal = torch.stack([-plane[0], -plane[1], torch.ones_like(plane[0])])
-        depth = (plane[2] - normal @ pose[:3, 3]) / (rays @ normal)
-        hit = pose[:3, 3] + rays * depth[..., None]
+        depth = (plane[2] - normal @ origin) / (rays @ normal)
+        hit = origin + rays * depth[..., None]
         dx, dy = hit[..., 0] - x, hit[..., 1] - y
         sx = np.cos(yaw) * dx + np.sin(yaw) * dy + cx  # into the frame of the scan
         sy = -np.sin(yaw) * dx + np.cos(yaw) * dy + cy
@@ -174,18 +197,81 @@ class Twin:
         sampled = F.grid_sample(texture, torch.stack([across, along], -1)[None], align_corners=True,
                                 padding_mode='zeros')[0].permute(1, 2, 0)
         alpha = sampled[..., 3:] * (depth > 0)[..., None]
-        return sampled[..., :3], alpha
+        return sampled[..., :3], alpha, depth[..., None]
+
+    def add_shape(self, name, pieces, colour):
+        """A generated object (twin_shapes.Shape): its convex pieces (object frame) in one flat colour (RGB 0-1)."""
+        planes = [hull_planes(np.asarray(p, float)) for p in pieces]
+        most = max(len(p) for p in planes)
+        padded = np.zeros((len(planes), most, 4))
+        padded[..., 3] = 1.0  # 0 . x <= 1 holds everywhere: a face that does not exist
+        for k, p in enumerate(planes):
+            padded[k, :len(p)] = p
+        self.objects[name] = {'kind': 'mesh', 'planes': torch.tensor(padded, dtype=torch.float32, device=self.device),
+                              'colour': torch.tensor(colour, dtype=torch.float32, device=self.device)}
+
+    def mesh_layer(self, camera, name, pose, K, width, height):
+        """Colour (RGB), coverage and depth of a generated object by ray casting its convex pieces; pose may scale
+        (into the wrist reconstruction's frame). Diffuse shading under a light from above."""
+        item = self.objects[name]
+        object_from_base = torch.tensor(np.linalg.inv(pose), dtype=torch.float32, device=self.device)
+        rotation = np.asarray(pose)[:3, :3]
+        rotation = rotation / np.linalg.norm(rotation[:, 0])
+        light = torch.tensor(rotation.T @ (LIGHT / np.linalg.norm(LIGHT)), dtype=torch.float32, device=self.device)
+        start, rays = self.rays(camera, K, width, height)
+        origin = object_from_base[:3, :3] @ start + object_from_base[:3, 3]
+        rays = rays @ object_from_base[:3, :3].T
+        best = torch.full((len(rays),), float('inf'), device=self.device)
+        shade = torch.zeros(len(rays), device=self.device)
+        for planes in item['planes']:
+            normals, bounds = planes[:, :3], planes[:, 3]
+            denominator = rays @ normals.T  # (pixels, faces)
+            numerator = bounds - normals @ origin
+            t = numerator / torch.where(denominator.abs() < 1e-12, torch.full_like(denominator, 1e-12), denominator)
+            entering = torch.where(denominator < 0, t, torch.full_like(t, -float('inf')))
+            t_in, face = entering.max(1)
+            t_out = torch.where(denominator > 0, t, torch.full_like(t, float('inf'))).min(1).values
+            outside = ((denominator.abs() < 1e-12) & (numerator < 0)).any(1)
+            hit = (t_in <= t_out) & (t_out > 0) & (t_in > 0) & ~outside & (t_in < best)
+            best = torch.where(hit, t_in, best)
+            shade = torch.where(hit, (normals[face] @ light).clamp(min=0), shade)
+        covered = torch.isfinite(best)
+        colour = item['colour'] * (AMBIENT + (1 - AMBIENT) * shade)[:, None]
+        return (colour.reshape(height, width, 3), covered.float().reshape(height, width, 1),
+                torch.where(covered, best, torch.zeros_like(best)).reshape(height, width, 1))
+
+    def objects_over(self, image, camera, K, width, height, objects, gains=None):
+        """The objects, given as (name, pose) pairs, laid over an image (RGB, 0-1), nearer ones in front."""
+        if not objects:
+            return image, torch.zeros_like(image[..., :1]), {}
+        layers = {'box': self.box_layer, 'splats': self.splat_layer, 'flat': self.flat_layer, 'mesh': self.mesh_layer}
+        colours, alphas, depths, masks = [], [], [], {}
+        for name, pose in objects:
+            colour, alpha, depth = layers[self.objects[name]['kind']](camera, name, pose, K, width, height)
+            if gains and name in gains:
+                colour = colour * torch.tensor(gains[name], dtype=torch.float32, device=self.device)
+            colours.append(colour)
+            alphas.append(alpha)
+            depths.append(torch.where(alpha > 1e-3, depth, torch.full_like(depth, float('inf'))))
+            masks[name] = alpha[..., 0]
+        order = torch.argsort(torch.stack(depths), dim=0, descending=True)  # farthest first
+        colours, alphas = torch.stack(colours), torch.stack(alphas)
+        covered = torch.zeros_like(image[..., :1])
+        for rank in range(len(objects)):
+            index = order[rank]
+            colour = torch.gather(colours, 0, index[None].expand(1, *colours.shape[1:]))[0]
+            alpha = torch.gather(alphas, 0, index[None])[0]
+            image = colour * alpha + image * (1 - alpha)
+            covered = alpha + covered * (1 - alpha)
+        return image, covered, masks
 
     @torch.no_grad()
     def wrist(self, base_from_cam, opening, objects=()):
-        """Wrist image (BGR, uint8) for a camera pose in the base frame, a jaw opening in percent and objects placed as
-        (name, x, y, yaw) tuples."""
+        """Wrist image (BGR, uint8) for a camera pose in the base frame, a jaw opening in percent and objects as
+        (name, pose) pairs."""
         camera = torch.tensor(np.linalg.inv(base_from_cam), dtype=torch.float32, device=self.device)[None]
         pinhole = recon_gs.composite(self.splats, camera, self.wrist_K, self.width, self.height, self.layer)
-        for name, x, y, yaw in objects:
-            layer = self.box_layer if self.objects[name]['kind'] == 'box' else self.object_layer
-            colour, alpha = layer(camera, name, x, y, yaw)
-            pinhole = colour * alpha + pinhole * (1 - alpha)
+        pinhole, _, _ = self.objects_over(pinhole, camera, self.wrist_K, self.width, self.height, list(objects))
         pinhole = pinhole.cpu().numpy()
         scene = cv2.remap(pinhole[..., ::-1].copy(), self.map_x, self.map_y, cv2.INTER_LINEAR)
         jaw = self.jaw_at(opening)
@@ -193,12 +279,42 @@ class Twin:
         return ((colour * jaw[..., 3:] + scene * (1 - jaw[..., 3:])) * 255).clip(0, 255).astype(np.uint8)
 
     @torch.no_grad()
-    def top(self, link_poses):
-        """Top image (BGR, uint8) for the link poses in the base frame."""
+    def top(self, link_poses, objects=(), gains=None, masks=False):
+        """Top image (BGR, uint8) for the link poses in the base frame, with objects as (name, pose) pairs drawn under
+        the arm; gains: per-object colour scale (RGB) for this camera. With masks, also the arm's alpha and each
+        object's alpha (before the arm is laid over them)."""
         poses = torch.tensor(link_poses, dtype=torch.float32, device=self.device)
         colours, alpha = recon_arm.render(self.arm_params, self.owners, poses, self.top_camera, self.top_K, 1280, 720)
-        image = (colours + (1 - alpha) * self.background_t).clamp(0, 1).cpu().numpy()
-        return (image[..., ::-1] * 255).astype(np.uint8)
+        scene, _, object_masks = self.objects_over(self.background_t, self.top_camera, self.top_K, 1280, 720, list(objects),
+                                                   gains)
+        image = (colours + (1 - alpha) * scene).clamp(0, 1).cpu().numpy()
+        image = (image[..., ::-1] * 255).astype(np.uint8)
+        if not masks:
+            return image
+        return image, alpha[..., 0].cpu().numpy(), {k: v.cpu().numpy() for k, v in object_masks.items()}
+
+
+def hull_planes(points, tolerance=1e-7):
+    """Faces of the convex hull of a few points as rows (n, b), unit n pointing out, n . x <= b inside."""
+    out = []
+    count = len(points)
+    for i in range(count):
+        for j in range(i + 1, count):
+            for k in range(j + 1, count):
+                normal = np.cross(points[j] - points[i], points[k] - points[i])
+                if np.linalg.norm(normal) < 1e-12:
+                    continue
+                normal /= np.linalg.norm(normal)
+                side = points @ normal - normal @ points[i]
+                if (side <= tolerance).all():
+                    plane = np.append(normal, normal @ points[i])
+                elif (side >= -tolerance).all():
+                    plane = np.append(-normal, -normal @ points[i])
+                else:
+                    continue
+                if not any(np.allclose(plane, other, atol=1e-6) for other in out):
+                    out.append(plane)
+    return np.array(out)
 
 
 def psnr(a, b, mask=None):
@@ -208,21 +324,17 @@ def psnr(a, b, mask=None):
 
 def check_object(twin, directory, out):
     """Renders with the object where it lay during its scan, beside the photographs brought to the workspace scan's light."""
-    name, placement = twin.load_object(directory)
-    if isinstance(placement, dict):
-        placement = (placement['x_m'], placement['y_m'], placement['yaw_rad'])
-        gain = np.array(json.loads((directory / 'object/box.json').read_text())['gain_vs_table'])
-    else:
-        placement = (*placement, 0.0)
-        gain = np.array(json.loads((directory / 'object/object.json').read_text())['gain_vs_table'])
+    name, pose = twin.load_object(directory)
+    meta = directory / 'object/box.json'
+    gain = np.array(json.loads((meta if meta.exists() else directory / 'object/object.json').read_text())['gain_vs_table'])
     poses = json.loads((directory / 'colmap/poses_base_from_cam.json').read_text())
     names = sorted(poses)[::max(1, len(poses) // 6)]
     rows, scores = [], []
     for view in names:
         real = np.clip(cv2.imread(str(directory / view)) / gain, 0, 255).astype(np.uint8)
-        pose = np.array(poses[view])
-        rendered = twin.wrist(pose, JAW_REFERENCE_OPENING, [(name, *placement)])
-        empty = twin.wrist(pose, JAW_REFERENCE_OPENING)
+        camera = np.array(poses[view])
+        rendered = twin.wrist(camera, JAW_REFERENCE_OPENING, [(name, pose)])
+        empty = twin.wrist(camera, JAW_REFERENCE_OPENING)
         scores.append((psnr(real, rendered), psnr(real, empty)))
         rows.append(np.hstack([real, rendered, empty]))
     scores = np.median(scores, 0)

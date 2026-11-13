@@ -1,0 +1,21 @@
+episode,success,policy,task,time,note
+0,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:29+08:00,rtc+smooth2; keys right; verified by video
+1,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:29+08:00,rtc+smooth2; keys right; verified by video
+2,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:29+08:00,rtc+smooth2; keys right; verified by video
+3,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:30+08:00,"rtc+smooth2; keys right; verified by video; keys left hanging on the outer edge of the box, outside it"
+4,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:30+08:00,rtc+smooth2; keys right; verified by video
+5,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:30+08:00,rtc+smooth2; keys right; verified by video
+6,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:31+08:00,rtc+smooth2; keys right; verified by video
+7,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:27:31+08:00,rtc+smooth2; keys right; verified by video; keys in the box before the wrist camera disconnected while the arm returned
+8,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:26+08:00,rtc+smooth2; keys right; verified by video
+9,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:27+08:00,rtc+smooth2; keys right; verified by video
+10,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:27+08:00,"rtc+smooth2; keys left; verified by video; went to the box without picking up the keys (never reached them), arm back at rest at ~18 s"
+11,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:27+08:00,rtc+smooth2; keys left; verified by video
+12,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:28+08:00,rtc+smooth2; keys left; verified by video; keys dropped against the outside of the box wall
+13,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:28+08:00,"rtc+smooth2; keys left; verified by video; repeated grasps at the keys from ~10 s, never lifted them, 60 s limit"
+14,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:28+08:00,rtc+smooth2; keys left; verified by video
+15,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:28+08:00,"rtc+smooth2; keys left; verified by video; repeated grasps at the keys, never lifted them, 60 s limit"
+16,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:29+08:00,"rtc+smooth2; keys left; verified by video; repeated grasps at the keys, never lifted them, 60 s limit"
+17,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:29+08:00,rtc+smooth2; keys left; verified by video
+18,0,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:29+08:00,"rtc+smooth2; keys left; verified by video; went to the box without picking up the keys, arm back at rest at ~5 s"
+19,1,runs/so101_full_v5/best,Put the key in the white box.,2026-11-04T15:36:29+08:00,rtc+smooth2; keys left; verified by video

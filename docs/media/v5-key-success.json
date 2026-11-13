@@ -1,0 +1,32 @@
+{
+  "dataset": "artifacts/datasets/rollout_full_v5_key_raised",
+  "episode": 1,
+  "outcome": {
+    "episode": "1",
+    "success": "1",
+    "policy": "runs/so101_full_v5/best",
+    "task": "Put the key in the white box.",
+    "time": "2026-11-04T15:27:29+08:00",
+    "note": "rtc+smooth2; keys right; verified by video"
+  },
+  "sources": {
+    "top": {
+      "path": "artifacts/datasets/rollout_full_v5_key_raised/videos/observation.images.top/chunk-000/file-000.mp4",
+      "from_timestamp": 36.13333333333333
+    },
+    "wrist": {
+      "path": "artifacts/datasets/rollout_full_v5_key_raised/videos/observation.images.wrist/chunk-000/file-000.mp4",
+      "from_timestamp": 36.13333333333333
+    }
+  },
+  "duration_seconds": 15.899999999999999,
+  "playback_speed": 1,
+  "preview_from_seconds": 0,
+  "audio": false,
+  "selection": "Selected successful V5 real-robot rollout; not an estimate of overall success rate",
+  "output_sha256": {
+    "v5-key-success.mp4": "3f06d15700ee93487d568c71abec0f69406361e11beaf0d1c3845132d63d58fe",
+    "v5-key-success.gif": "0d8c314e68cd091a2c6559fc15784f246a3b4a2714389ff543851141feb7549d",
+    "v5-key-success.jpg": "6792dbef6fa143fd9e1af6d6d406f772b8e5bf733495727eb3b3e3acd15549d8"
+  }
+}

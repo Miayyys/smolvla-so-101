@@ -1,0 +1,22 @@
+episode,success,policy,task,time,note
+0,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:53:57+08:00,rtc+smooth2; doll left; verified by video
+1,0,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:53:58+08:00,"rtc+smooth2; doll left; verified by video; doll at the far top-left corner: repeated grasps from 30 s, never lifted it, 60 s limit"
+2,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:53:58+08:00,rtc+smooth2; doll left; verified by video
+3,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:53:59+08:00,rtc+smooth2; doll left; verified by video
+4,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:54:00+08:00,rtc+smooth2; doll left; verified by video; doll in the box and released before the wrist camera disconnected while the arm returned
+5,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:54:00+08:00,rtc+smooth2; doll left; verified by video; doll in the box and released before the wrist camera disconnected while the arm returned
+6,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:56+08:00,rtc+smooth2; doll left; verified by video
+7,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:56+08:00,rtc+smooth2; doll left; verified by video
+8,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:57+08:00,rtc+smooth2; doll left; verified by video
+9,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:57+08:00,rtc+smooth2; doll left; verified by video
+10,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:57+08:00,rtc+smooth2; doll left; verified by video
+11,0,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:58+08:00,"rtc+smooth2; doll right; verified by video; doll at the far top-right corner: repeated grasps, never lifted it, 60 s limit"
+12,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:58+08:00,rtc+smooth2; doll right; verified by video
+13,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T14:59:58+08:00,rtc+smooth2; doll right; verified by video; doll in the box and released before the wrist camera disconnected while the arm returned
+14,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:01:46+08:00,rtc+smooth2; doll right; verified by video; doll in the box and released before the wrist camera disconnected while the arm returned
+17,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:05:42+08:00,rtc+smooth2; doll right; verified by video; doll in the box and released before the wrist camera disconnected while the arm returned
+18,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:14:28+08:00,rtc+smooth2; doll right; verified by video
+19,0,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:14:29+08:00,rtc+smooth2; doll right; verified by video; held the doll over the box edge from ~20 s without releasing until the 60 s limit
+20,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:14:29+08:00,rtc+smooth2; doll right; verified by video
+21,1,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:22:14+08:00,"rtc+smooth2; doll right; verified by video; 16 grasp attempts, in the box at ~48 s"
+22,0,runs/so101_full_v5/best,Put the doll in the white box.,2026-11-04T15:22:14+08:00,"rtc+smooth2; doll right (near the base); verified by video; the doll ended up lying on the box edge, outside the box, arm back at rest at 14 s"

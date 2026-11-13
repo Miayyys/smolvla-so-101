@@ -57,10 +57,26 @@ def prepared_identity(cfg):
     return {k: v for k, v in cfg.items() if k not in NOT_PREPARED_KEYS}
 
 
-def decode_episode(path, expected, rows, fps, checks):
-    """Decode one episode's frames as JPEG bytes (worker process); returns (jpegs, max error, {row: RGB})."""
+def resize_frame(array, size):
+    """An RGB uint8 frame as SmolVLA's preprocessing resizes it for a ``size`` x ``size`` input (resize_with_pad,
+    padding on the left and top), rounded back to uint8. A cached frame of exactly this size passes resize_with_pad
+    unchanged, so training sees the model's own resize of the full frame up to this rounding and the JPEG."""
+    import torch
+    from lerobot.policies.common.vla_utils import resize_with_pad
+    image = torch.from_numpy(array).permute(2, 0, 1)[None].float() / 255
+    image = resize_with_pad(image, size, size, pad_value=0)
+    return (image[0].permute(1, 2, 0) * 255).round().clamp(0, 255).to(torch.uint8).numpy()
+
+
+def decode_episode(path, expected, rows, fps, checks, size=None):
+    """Decode one episode's frames as JPEG bytes (worker process); returns (jpegs, max error, {row: RGB}).
+
+    With ``size`` the frames are cached resized (resize_frame); the checked frames are returned at full size."""
     import av
     from PIL import Image
+    if size is not None:
+        import torch
+        torch.set_num_threads(1)  # one process per CPU already (prepare_workers); torch's own threads oversubscribe
     jpegs = []; arrays = {}; max_error = 0.0
     with av.open(str(path)) as container:
         stream = container.streams.video[0]
@@ -78,7 +94,7 @@ def decode_episode(path, expected, rows, fps, checks):
                 raise ValueError(f'{path}: video/table timestamp mismatch at frame {len(jpegs)}: {error}')
             array = frame.to_ndarray(format='rgb24')
             buffer = io.BytesIO()
-            Image.fromarray(array).save(buffer, format='JPEG', quality=95, subsampling=0)
+            Image.fromarray(array if size is None else resize_frame(array, size)).save(buffer, format='JPEG', quality=95, subsampling=0)
             if rows[len(jpegs)] in checks:
                 arrays[int(rows[len(jpegs)])] = array
             jpegs.append(buffer.getvalue())
@@ -110,6 +126,14 @@ def prepare(cfg, out):
     statistics and the reported frame counts use each frame once. ``stats_from`` = path of an earlier run's stats.json
     reuses its normalization (fine-tuning from that run with ``init_weights`` keeps the inputs/outputs the weights were
     trained for, and keeps the normalized validation error comparable).
+
+    With ``advantage`` = {labels, dropout} (RECAP, so101vla/advantage.py), ``labels`` is an .npz whose ``indicator``
+    holds one 0/1 value per dataset row. Policy-driven frames are then sampled too, since their label says whether
+    to imitate them, and every chunk runs to the episode's (trimmed) end. ``include_policy_frames`` does the same
+    without labels (the value function, so101vla/value.py); validation episodes may then contain policy frames.
+
+    ``cache_resize`` = true caches every frame already resized for the model input (``image_size``, resize_frame):
+    about a sixth of the bytes of full frames.
     """
     import pandas as pd
     from PIL import Image
@@ -138,6 +162,13 @@ def prepare(cfg, out):
     task_index = table['task_index'].to_numpy(dtype='int64')
     trim = cfg.get('trim_static_tail')
     trim_head = cfg.get('trim_static_head')
+    advantage_cfg = cfg.get('advantage')
+    policy_frames = bool(advantage_cfg or cfg.get('include_policy_frames'))
+    indicator = None
+    if advantage_cfg:
+        indicator = np.load(advantage_cfg['labels'])['indicator'].astype('int8')
+        if indicator.shape != (len(table),) or not np.isin(indicator, (0, 1)).all():
+            raise ValueError(f'advantage labels need one 0/1 value per dataset row ({len(table)}), got {indicator.shape}')
     human = (np.stack(table['intervention'].to_numpy()).reshape(-1).astype(bool) if 'intervention' in table
              else np.ones(len(eps), dtype=bool))
     kept = np.ones(len(eps), dtype=bool)
@@ -161,11 +192,12 @@ def prepare(cfg, out):
             trimmed[int(ep)] = int(rows[-1] - end)
         end_rows[rows] = end
         if not human[rows].all():
-            if ep in splits['validation']:
+            if ep in splits['validation'] and not policy_frames:
                 raise ValueError(f'Validation episode {ep} has policy-driven frames')
-            kept[rows[~human[rows]]] = False
-            for start, stop in so101_correction.runs(human[rows]):
-                end_rows[rows[start:stop]] = min(rows[stop - 1], end)
+            if not policy_frames:
+                kept[rows[~human[rows]]] = False
+                for start, stop in so101_correction.runs(human[rows]):
+                    end_rows[rows[start:stop]] = min(rows[stop - 1], end)
         if ep in splits['validation']:
             validation_rows.extend(np.linspace(begin, max(begin, end - 49), cfg['validation_frames_per_episode'], dtype=int).tolist())
     train = np.isin(eps, splits['train']) & kept
@@ -204,7 +236,8 @@ def prepare(cfg, out):
             for index in range(len(jobs) + 1):
                 if index < len(jobs):
                     ep, rows, path, expected = jobs[index]
-                    pending.append((ep, rows, pool.submit(decode_episode, path, expected, rows, fps, selected_checks)))
+                    pending.append((ep, rows, pool.submit(decode_episode, path, expected, rows, fps, selected_checks,
+                                                          cfg['image_size'] if cfg.get('cache_resize') else None)))
                 while pending and (len(pending) >= 2 * workers or index == len(jobs)):
                     ep, rows, future = pending.popleft()
                     jpegs, error, checked = future.result()
@@ -228,11 +261,14 @@ def prepare(cfg, out):
                 official = dataset[row][video_key].permute(1, 2, 0).numpy()
                 if not np.array_equal(official, arrays[(video_key, row)]):
                     raise ValueError(f'{video_key}: sequential decoder differs from official LeRobot RGB frame at row {row}')
+                if cfg.get('cache_resize'):
+                    official = resize_frame(official, cfg['image_size'])
                 stream.seek(caches[video_key]['offsets'][row])
                 image = np.asarray(Image.open(io.BytesIO(stream.read(int(caches[video_key]['lengths'][row])))).convert('RGB'))
                 rgb_errors[video_key].append(float(np.abs(image.astype('float32') - official).mean()))
     np.savez(out / 'data.npz', states=states, actions=actions, episodes=eps, end_rows=end_rows,
              train_rows=sampled_rows, validation_rows=validation_rows, task_index=task_index, task_names=task_names.astype(str),
+             **({'indicator': indicator} if advantage_cfg else {}),
              **{f'{k.split(".")[-1]}_{name}': c[name] for k, c in caches.items() for name in ('offsets', 'lengths')})
     (out / 'stats.json').write_text(json.dumps(stats, indent=2) + '\n')
     manifest = {'config': cfg, 'splits': splits, 'frames': len(eps), 'train_frames': len(train_rows),
@@ -240,7 +276,10 @@ def prepare(cfg, out):
                 'train_frames_by_task': {task_names[i]: int((task_index[train_rows] == i).sum()) for i in range(len(task_names))},
                 'trimmed_tail_frames': trimmed, **({'trimmed_head_frames': trimmed_head} if trim_head else {}),
                 'trimmed_train_frames': int((np.isin(eps, splits['train']) & ~kept & human).sum()),
-                'policy_frames_excluded': int((~human).sum()),
+                'policy_frames_excluded': 0 if policy_frames else int((~human).sum()),
+                **({'advantage': {'labels_sha256': sha(advantage_cfg['labels']),
+                                  'positive_share_sampled': float(indicator[sampled_rows].mean()),
+                                  'policy_frames_sampled': int((~human[sampled_rows]).sum())}} if advantage_cfg else {}),
                 'correction_train_frames': len(correction_rows), 'correction_repeat': cfg.get('correction_repeat', 1),
                 'sampled_rows': len(sampled_rows),
                 'data_sha256': {str(p.relative_to(root)): sha(p) for p in data_files},
@@ -253,6 +292,7 @@ def prepare(cfg, out):
     (out / 'prepared.json').write_text(json.dumps(manifest, indent=2) + '\n')
     emit(out, {'stage': 'prepared', 'train_frames': len(train_rows), 'validation_rows': len(validation_rows),
                'trimmed_train_frames': manifest['trimmed_train_frames'], 'policy_frames_excluded': manifest['policy_frames_excluded'],
+               'advantage': manifest.get('advantage'),
                'correction_train_frames': len(correction_rows), 'sampled_rows': len(sampled_rows),
                'train_frames_by_task': manifest['train_frames_by_task'],
                'cache_bytes': {k: c['bytes'] for k, c in caches.items()}, 'max_timestamp_error_s': max_alignment_error})
@@ -266,7 +306,8 @@ class Frames:
         # A fixed config task (experiment 1) or each frame's own dataset task.
         self.task = cfg.get('task')
 
-    def batch(self, rows):
+    def batch(self, rows, drop=None):
+        """Inputs for ``rows``; with advantage labels also each row's indicator (-1 where ``drop`` is set)."""
         import torch
         from PIL import Image
         images = {key: [] for key in self.camera_map}; actions, masks = [], []
@@ -283,7 +324,9 @@ class Frames:
                 'observation.state': torch.from_numpy(self.data['states'][rows].copy()),
                 'action': torch.from_numpy(np.stack(actions)),
                 'action_is_pad': torch.from_numpy(np.stack(masks)),
-                'task': [self.task or str(self.data['task_names'][self.data['task_index'][row]]) for row in rows]}
+                'task': [self.task or str(self.data['task_names'][self.data['task_index'][row]]) for row in rows],
+                **({'advantage': np.where(drop if drop is not None else False, -1, self.data['indicator'][rows]).astype('int64')}
+                   if 'indicator' in self.data else {})}
 
 
 def train(cfg, out, smoke, resume=False, stop_step=None):
@@ -329,6 +372,12 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
     if goal_cfg:
         from so101vla import goal as so101_goal
         so101_goal.attach(policy)
+    advantage_cfg = cfg.get('advantage')
+    if advantage_cfg:
+        from so101vla import advantage as so101_advantage
+        if goal_cfg or cfg.get('evaluation') == 'scripted_sim':
+            raise ValueError('advantage conditioning is only wired for real-data runs without goal conditioning')
+        so101_advantage.enable(policy, Path(cfg['vlm_assets_dir']).resolve())
     pre, post = make_pre_post_processors(policy.config, cfg['model_dir'],
         preprocessor_overrides={
             'tokenizer_processor': {'tokenizer_name': str(Path(cfg['vlm_assets_dir']).resolve())},
@@ -339,6 +388,10 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
         frames = ScriptedFrames(cfg, out)
     else:
         frames = Frames(out, cfg)
+    sampler = None
+    if cfg.get('sampling'):
+        from so101vla.recap_sampling import BalancedSampler
+        sampler = BalancedSampler(frames.data, cfg)
     parameters = [(n, p) for n, p in policy.named_parameters() if p.requires_grad]
     vlm_parameters = [n for n, _ in parameters if '.vlm.' in n]
     if bool(vlm_parameters) != bool(cfg.get('train_vlm')):
@@ -382,6 +435,9 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
             for row in frames.data['validation_rows']:
                 raw = frames.batch([int(row)])
                 goal = raw.pop('goal', None)
+                raw.pop('advantage', None)
+                if advantage_cfg:  # validation episodes are demonstrations: the inference default, positive
+                    so101_advantage.set_indicator(policy, None)
                 target = raw['action'].numpy()[0].copy()
                 mask = ~raw['action_is_pad'].numpy()[0]
                 torch.manual_seed(100000 + int(row))
@@ -419,8 +475,20 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
                     'position_error_mm_p90': float(np.percentile(merged['position_error_mm'], 90)),
                     'rotation_error_deg_median': float(np.median(merged['rotation_error_deg'])),
                     'aperture_error_mean': float(merged['aperture_error'].mean())}
+            selection = normalized
+            if cfg.get('validation_metric') == 'real_twin_mean':
+                groups = frames.data['sampling_group'][frames.data['validation_rows']]
+                errors = {}
+                for group, name in [(0, 'real'), (1, 'twin')]:
+                    parts = [e for e, g in zip(joint_errors, groups) if g == group]
+                    if not parts:
+                        raise ValueError('Balanced validation requires both real and twin observations')
+                    errors[name] = float(np.mean(np.concatenate(parts).mean(0) / np.asarray(stats['action']['std'])))
+                selection = .5 * (errors['real'] + errors['twin'])
+                result.update(group_normalized_action_mae=errors, selection_metric=selection,
+                              selection_metric_name='real_twin_mean')
             emit(out, result)
-            return normalized
+            return selection
         finally:
             torch.set_rng_state(old_rng); torch.cuda.set_rng_state(old_cuda_rng); policy.train()
 
@@ -431,6 +499,9 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
         temporary.replace(folder / 'model.safetensors')
         policy.config.save_pretrained(folder)
         pre.save_pretrained(folder); post.save_pretrained(folder)
+        if advantage_cfg:
+            so101_advantage.write_marker(folder, Path(cfg['vlm_assets_dir']).resolve(), labels=advantage_cfg['labels'],
+                                         dropout=advantage_cfg['dropout'])
 
     started = time.perf_counter()
     best_step = stale = start_step = 0
@@ -457,8 +528,11 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
 
     def draw():
         state = rng.bit_generator.state
-        rows = rng.choice(frames.data['train_rows'], cfg['batch_size'], replace=True)
-        return state, loader.submit(frames.batch, rows)
+        rows = (sampler.draw(rng, cfg['batch_size']) if sampler is not None else
+                rng.choice(frames.data['train_rows'], cfg['batch_size'], replace=True))
+        # RECAP: the indicator is omitted at random so that the unconditioned policy is learned too.
+        drop = rng.random(cfg['batch_size']) < advantage_cfg['dropout'] if advantage_cfg else None
+        return state, loader.submit(frames.batch, rows, drop)
 
     pending = draw()
     first_param = next(p for n, p in parameters if 'action_out_proj.weight' in n)
@@ -477,6 +551,9 @@ def train(cfg, out, smoke, resume=False, stop_step=None):
             raw = pending[1].result()
             pending = draw()
             goal = raw.pop('goal', None)
+            indicator = raw.pop('advantage', None)
+            if advantage_cfg:
+                so101_advantage.set_indicator(policy, torch.from_numpy(indicator))
             batch = pre(raw)
             with torch.autocast('cuda', dtype=torch.bfloat16):
                 if goal_cfg:
@@ -590,7 +667,11 @@ def main():
         from so101vla.scripted import prepare_scripted
         prepare_scripted(cfg, out)
     elif args.stage == 'prepare':
-        prepare(cfg, out)
+        if cfg.get('cache_from'):
+            from so101vla.recap_sampling import prepare_cached
+            prepare_cached(cfg, out)
+        else:
+            prepare(cfg, out)
     else:
         train(cfg, out, args.stage == 'smoke', resume=args.resume, stop_step=args.stop_step)
 

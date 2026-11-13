@@ -282,9 +282,9 @@ class Kinematics:
         self.data = mujoco.MjData(self.model)
         self.gripper = self.model.body('gripper').id
 
-    def forward(self, q_deg):
+    def forward(self, q_deg, jaw_rad=0.0):
         self.data.qpos[:5] = np.radians(q_deg)
-        self.data.qpos[5] = 0.0
+        self.data.qpos[5] = jaw_rad
         mujoco.mj_kinematics(self.model, self.data)
 
     def tip(self, q_deg):
@@ -429,7 +429,11 @@ def check(args):
         cap.release()
 
     kin = Kinematics(result['mjcf'])
-    kin.forward(raw_to_lerobot_deg(raw, load_calibration()) + offsets)
+    calibration = load_calibration()
+    jaw = calibration['gripper']  # same linear map as recon_table.py, so a closed jaw is drawn closed
+    low, high = kin.model.jnt_range[5]
+    opening = (raw['gripper'] - jaw['range_min']) / (jaw['range_max'] - jaw['range_min'])
+    kin.forward(raw_to_lerobot_deg(raw, calibration) + offsets, low + opening * (high - low))
     model, state = kin.model, kin.data
     colours = {}
     for geom in range(model.ngeom):

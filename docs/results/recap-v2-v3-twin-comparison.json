@@ -1,0 +1,780 @@
+{
+  "model_sha256": "b5536eb91a643411b1e50d1a6ec06caca2c93a919d6cc637e297a4cb75762030",
+  "counts": [
+    {
+      "model": "v2",
+      "execute": 30,
+      "group": "seen",
+      "trials": 2,
+      "lifted_3cm": 2,
+      "centre_in_box": 2,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "group": "light",
+      "trials": 4,
+      "lifted_3cm": 1,
+      "centre_in_box": 1,
+      "fully_in_box": 0
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "group": "black",
+      "trials": 4,
+      "lifted_3cm": 2,
+      "centre_in_box": 2,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "group": "seen",
+      "trials": 2,
+      "lifted_3cm": 1,
+      "centre_in_box": 1,
+      "fully_in_box": 0
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "group": "light",
+      "trials": 4,
+      "lifted_3cm": 2,
+      "centre_in_box": 2,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "group": "black",
+      "trials": 4,
+      "lifted_3cm": 3,
+      "centre_in_box": 3,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "group": "seen",
+      "trials": 2,
+      "lifted_3cm": 2,
+      "centre_in_box": 2,
+      "fully_in_box": 0
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "group": "light",
+      "trials": 4,
+      "lifted_3cm": 3,
+      "centre_in_box": 3,
+      "fully_in_box": 3
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "group": "black",
+      "trials": 4,
+      "lifted_3cm": 2,
+      "centre_in_box": 2,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "group": "seen",
+      "trials": 2,
+      "lifted_3cm": 1,
+      "centre_in_box": 1,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "group": "light",
+      "trials": 4,
+      "lifted_3cm": 4,
+      "centre_in_box": 4,
+      "fully_in_box": 1
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "group": "black",
+      "trials": 4,
+      "lifted_3cm": 3,
+      "centre_in_box": 3,
+      "fully_in_box": 3
+    }
+  ],
+  "pairs": [
+    {
+      "execute": 30,
+      "name": "seen_5011",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": true,
+      "v3_full": false
+    },
+    {
+      "execute": 30,
+      "name": "seen_5017",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 30,
+      "name": "left_0_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": false,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 30,
+      "name": "left_0_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": false,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 30,
+      "name": "left_90_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 30,
+      "name": "left_90_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 30,
+      "name": "right_0_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 30,
+      "name": "right_0_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 30,
+      "name": "right_90_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 30,
+      "name": "right_90_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": false,
+      "v2_full": true,
+      "v3_full": false
+    },
+    {
+      "execute": 50,
+      "name": "seen_5011",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 50,
+      "name": "seen_5017",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": false,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 50,
+      "name": "left_0_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": true,
+      "v3_full": false
+    },
+    {
+      "execute": 50,
+      "name": "left_0_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": false,
+      "v2_full": true,
+      "v3_full": false
+    },
+    {
+      "execute": 50,
+      "name": "left_90_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 50,
+      "name": "left_90_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 50,
+      "name": "right_0_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": false
+    },
+    {
+      "execute": 50,
+      "name": "right_0_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 50,
+      "name": "right_90_light",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": false,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    },
+    {
+      "execute": 50,
+      "name": "right_90_black",
+      "initial_image_mae": 0.0,
+      "initial_image_max_error": 0,
+      "v2_lifted": true,
+      "v3_lifted": true,
+      "v2_full": false,
+      "v3_full": true
+    }
+  ],
+  "trials": [
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "seen_5011",
+      "group": "seen",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 75.09329985954834,
+      "nearest_closing_angle_deg": 6.690081798496365
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "seen_5017",
+      "group": "seen",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 95.57791107047521,
+      "nearest_closing_angle_deg": 26.0550644388641
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "left_0_light",
+      "group": "light",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 0.3798716306314681,
+      "nearest_closing_angle_deg": 13.22000201489743
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "left_0_black",
+      "group": "black",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 4.4104251310968234e-05,
+      "nearest_closing_angle_deg": 30.24044917487487
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "left_90_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 75.67114439372018,
+      "nearest_closing_angle_deg": 13.416595393118254
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "left_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 76.479598594784,
+      "nearest_closing_angle_deg": 13.77458275338395
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "right_0_light",
+      "group": "light",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.1080464211254216e-05,
+      "nearest_closing_angle_deg": null
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "right_0_black",
+      "group": "black",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.1080464211254216e-05,
+      "nearest_closing_angle_deg": null
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "right_90_light",
+      "group": "light",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 0.05895861139388779,
+      "nearest_closing_angle_deg": 23.99885173723077
+    },
+    {
+      "model": "v2",
+      "execute": 30,
+      "name": "right_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 81.96022050194883,
+      "nearest_closing_angle_deg": 7.404063667872617
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "left_0_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 72.7655314905516,
+      "nearest_closing_angle_deg": 10.647336509167145
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "left_0_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 74.50267942000819,
+      "nearest_closing_angle_deg": 2.436245920778271
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "right_0_light",
+      "group": "light",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.1080464211254216e-05,
+      "nearest_closing_angle_deg": null
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "right_0_black",
+      "group": "black",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.1080464211254216e-05,
+      "nearest_closing_angle_deg": 81.41495439471356
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "seen_5011",
+      "group": "seen",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.8727966413136237,
+      "nearest_closing_angle_deg": 14.297237501672823
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "seen_5017",
+      "group": "seen",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 93.34863141417519,
+      "nearest_closing_angle_deg": 3.9771281923944084
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "left_90_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 70.56731430008686,
+      "nearest_closing_angle_deg": 11.279847433706859
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "left_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 74.37164634912037,
+      "nearest_closing_angle_deg": 11.64256279341649
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "right_90_light",
+      "group": "light",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 0.019581141321346404,
+      "nearest_closing_angle_deg": 10.853793516873106
+    },
+    {
+      "model": "v2",
+      "execute": 50,
+      "name": "right_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 72.76720672999585,
+      "nearest_closing_angle_deg": 8.702140090001517
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "seen_5011",
+      "group": "seen",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 75.51063343214602,
+      "nearest_closing_angle_deg": 0.5698028009238165
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "seen_5017",
+      "group": "seen",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 95.35740695174592,
+      "nearest_closing_angle_deg": 5.778562856012109
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "left_0_light",
+      "group": "light",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 0.00014007409442675636,
+      "nearest_closing_angle_deg": null
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "left_0_black",
+      "group": "black",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.1080464211525266e-05,
+      "nearest_closing_angle_deg": null
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "left_90_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 78.30857857010128,
+      "nearest_closing_angle_deg": 2.305305342085622
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "left_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 77.12956807312108,
+      "nearest_closing_angle_deg": 7.864587128736169
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "right_0_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 76.13203573102524,
+      "nearest_closing_angle_deg": 3.9728216130020737
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "right_0_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 75.10605012459071,
+      "nearest_closing_angle_deg": 3.050443458916547
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "right_90_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 79.18892885542353,
+      "nearest_closing_angle_deg": 35.368813476181806
+    },
+    {
+      "model": "v3",
+      "execute": 30,
+      "name": "right_90_black",
+      "group": "black",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 0.019546461638259797,
+      "nearest_closing_angle_deg": 21.527279410870534
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "seen_5011",
+      "group": "seen",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 79.00530115280351,
+      "nearest_closing_angle_deg": 1.3095487421912126
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "seen_5017",
+      "group": "seen",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 7.2415499295447825,
+      "nearest_closing_angle_deg": 6.855959483488561
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "left_0_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 78.27950262973651,
+      "nearest_closing_angle_deg": 4.437750867795379
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "left_0_black",
+      "group": "black",
+      "lifted_3cm": false,
+      "centre_in_box": false,
+      "fully_in_box": false,
+      "max_lift_mm": 2.1080464211525266e-05,
+      "nearest_closing_angle_deg": null
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "left_90_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 85.45751192074081,
+      "nearest_closing_angle_deg": 39.67612164730861
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "left_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 74.4990531571497,
+      "nearest_closing_angle_deg": 5.70604108604385
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "right_0_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": false,
+      "max_lift_mm": 79.37932249681211,
+      "nearest_closing_angle_deg": 16.373212449788706
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "right_0_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 73.93728403638922,
+      "nearest_closing_angle_deg": 8.554404121220436
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "right_90_light",
+      "group": "light",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 73.2985444184721,
+      "nearest_closing_angle_deg": 18.59641538055715
+    },
+    {
+      "model": "v3",
+      "execute": 50,
+      "name": "right_90_black",
+      "group": "black",
+      "lifted_3cm": true,
+      "centre_in_box": true,
+      "fully_in_box": true,
+      "max_lift_mm": 77.65134159403162,
+      "nearest_closing_angle_deg": 0.7922668553980505
+    }
+  ],
+  "verification": "40 traces finite, expected state/action/metric shapes and preview frame counts; matched task, control, starting states, placements, colours, seeds, expert outcomes",
+  "case_provenance": {
+    "seen_group_meaning": "seen by v2; not necessarily seen by v3",
+    "cases": {
+      "seen_5011": {
+        "dataset": "so101_twin_gen_v2b_512",
+        "source_episode": 10,
+        "merged_episode": 786,
+        "v2_split": "train",
+        "v3_split": "validation"
+      },
+      "seen_5017": {
+        "dataset": "so101_twin_gen_v2b_512",
+        "source_episode": 15,
+        "merged_episode": 791,
+        "v2_split": "train",
+        "v3_split": "train"
+      }
+    },
+    "verified_against": "server dataset meta/twin_expert.json, merged meta/recap_outcomes.json, configs/so101_recap_v3_partition_policy.json"
+  },
+  "verified_at": "2026-11-13T13:46:24.300576+08:00",
+  "physical_robot_connected": false
+}

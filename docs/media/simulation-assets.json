@@ -1,0 +1,26 @@
+[
+  {
+    "source": "runs/twin/policy_recap_v3_local_30/right_0_black/preview.mp4",
+    "published": "docs/media/right_0_black-preview.mp4"
+  },
+  {
+    "source": "runs/twin/policy_recap_v3_local_50/left_0_black/preview.mp4",
+    "published": "docs/media/left_0_black-preview.mp4"
+  },
+  {
+    "source": "runs/twin/recap_v3_generated_fit/initial_scenes.jpg",
+    "published": "docs/media/recap_v3_generated_fit-initial_scenes.jpg"
+  },
+  {
+    "source": "runs/twin/recap_v3_generated_fit/final_scenes.jpg",
+    "published": "docs/media/recap_v3_generated_fit-final_scenes.jpg"
+  },
+  {
+    "source": "runs/twin/policy_recap_v3_generated_30/train_7013/preview.mp4",
+    "published": "docs/media/train_7013-preview.mp4"
+  },
+  {
+    "source": "runs/twin/policy_recap_v3_generated_30/validation_7025/preview.mp4",
+    "published": "docs/media/validation_7025-preview.mp4"
+  }
+]

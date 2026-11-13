@@ -9,3 +9,9 @@ __pycache__/
 /dist/
 /.venv-rknn/
 /.venv-gs/
+MUJOCO_LOG.TXT
+.env
+.env.*
+!.env.example
+.suanjia_token
+.suanjia_shutdown_url

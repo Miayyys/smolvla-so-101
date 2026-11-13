@@ -116,6 +116,10 @@ def main():
         install(sigma)
         print(f'so101vla.rollout: Gaussian smoothing of action chunks, sigma={sigma} steps', flush=True)
     install_rtc_fixes()
+    from so101vla import advantage
+    path = next((a.split('=', 1)[1] for a in args if a.startswith('--policy.path=')), None)
+    if path and advantage.install_for_checkpoint(path):
+        print(f'so101vla.rollout: advantage-conditioned checkpoint, prompting "{advantage.TEXT[advantage.DEFAULT_INDICATOR]}"', flush=True)
     from so101vla import correction
     correction.install()
     total = next((a.split('=', 1)[1] for a in args if a.startswith('--dataset.num_episodes=')), None)

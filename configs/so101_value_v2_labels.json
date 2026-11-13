@@ -1,0 +1,44 @@
+{
+  "model_dir": "artifacts/smolvla_base",
+  "vlm_assets_dir": "artifacts/transfer/smolvlm2_assets",
+  "dataset_root": "artifacts/datasets/so101_recap_v2_512",
+  "cache_dirs": {
+    "observation.images.top": "/dev/shm/recap_v2",
+    "observation.images.wrist": "/root/sj-fs/cache_recap_v2"
+  },
+  "prepare_workers": 16,
+  "seed": 42,
+  "camera_map": {
+    "observation.images.camera1": "observation.images.top",
+    "observation.images.camera2": "observation.images.wrist"
+  },
+  "image_size": 512,
+  "cache_resize": true,
+  "stats_from": "runs/so101_pilot_v2/stats.json",
+  "init_weights": "runs/so101_full_v5/best/model.safetensors",
+  "partition": "configs/so101_recap_v2_partition_value.json",
+  "output": "runs/so101_value_v2_labels",
+  "include_policy_frames": true,
+  "validation_frames_per_episode": 10,
+  "batch_size": 16,
+  "gradient_accumulation": 2,
+  "steps": 4000,
+  "eval_every": 250,
+  "patience_evaluations": 6,
+  "learning_rate": 2e-05,
+  "minimum_learning_rate": 2e-06,
+  "warmup_steps": 200,
+  "weight_decay": 1e-10,
+  "gradient_clip": 10.0,
+  "value": {
+    "horizon_s": 60,
+    "train_vision": true,
+    "head_lr_scale": 10.0,
+    "advantage_steps": 50,
+    "positive_share": 0.4,
+    "label_batch_size": 64,
+    "checkpoint_source": "runs/so101_value_v1/best/value.safetensors"
+  },
+  "data_scope": "840 episodes: RECAP v1 plus 300 twin v2/v2b episodes. Existing value v1 labels all rows; no value retraining. The original validation/test episode indices are unchanged.",
+  "schedule_source": "Labelling only with the existing value v1 best checkpoint; no value training is scheduled."
+}

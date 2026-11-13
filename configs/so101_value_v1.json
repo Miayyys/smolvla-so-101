@@ -1,0 +1,43 @@
+{
+  "model_dir": "artifacts/smolvla_base",
+  "vlm_assets_dir": "artifacts/transfer/smolvlm2_assets",
+  "dataset_root": "artifacts/datasets/so101_recap_v1_512",
+  "cache_dirs": {
+    "observation.images.top": "/dev/shm/recap_v1",
+    "observation.images.wrist": "/root/sj-fs/cache_recap_v1"
+  },
+  "prepare_workers": 16,
+  "seed": 42,
+  "camera_map": {
+    "observation.images.camera1": "observation.images.top",
+    "observation.images.camera2": "observation.images.wrist"
+  },
+  "image_size": 512,
+  "cache_resize": true,
+  "stats_from": "runs/so101_pilot_v2/stats.json",
+  "init_weights": "runs/so101_full_v5/best/model.safetensors",
+  "partition": "configs/so101_recap_v1_partition_value.json",
+  "output": "runs/so101_value_v1",
+  "include_policy_frames": true,
+  "validation_frames_per_episode": 10,
+  "batch_size": 16,
+  "gradient_accumulation": 2,
+  "steps": 4000,
+  "eval_every": 250,
+  "patience_evaluations": 6,
+  "learning_rate": 2e-05,
+  "minimum_learning_rate": 2e-06,
+  "warmup_steps": 200,
+  "weight_decay": 1e-10,
+  "gradient_clip": 10.0,
+  "value": {
+    "horizon_s": 60,
+    "train_vision": true,
+    "head_lr_scale": 10.0,
+    "advantage_steps": 50,
+    "positive_share": 0.4,
+    "label_batch_size": 64
+  },
+  "data_scope": "RECAP value function (so101vla/value.py): all 538 episodes of so101_recap_v1 with an outcome (demos, corrections, real rollouts with success labels, twin expert); validation = the 11 pilot_v3 validation demos + 42 held-out rollout/twin episodes",
+  "schedule_source": "first value run: lr 2e-5 (VLM incl. vision encoder) and 10x for the new head, warmup 200, cosine to 2e-6, 4000 steps of 32, early stop after 6 evaluations without a lower validation cross-entropy"
+}

@@ -1,0 +1,52 @@
+{
+  "model_dir": "artifacts/smolvla_base",
+  "vlm_assets_dir": "artifacts/transfer/smolvlm2_assets",
+  "dataset_root": "artifacts/datasets/so101_recap_v2_512",
+  "cache_dirs": {
+    "observation.images.top": "/dev/shm/recap_v2",
+    "observation.images.wrist": "/root/sj-fs/cache_recap_v2"
+  },
+  "prepare_workers": 16,
+  "seed": 42,
+  "camera_map": {
+    "observation.images.camera1": "observation.images.top",
+    "observation.images.camera2": "observation.images.wrist"
+  },
+  "image_size": 512,
+  "cache_resize": true,
+  "stats_from": "runs/so101_pilot_v2/stats.json",
+  "init_weights": "runs/so101_full_v5/best/model.safetensors",
+  "partition": "configs/so101_recap_v2_partition_policy.json",
+  "output": "runs/so101_recap_v2",
+  "batch_size": 16,
+  "gradient_accumulation": 4,
+  "steps": 5000,
+  "learning_rate": 5e-05,
+  "minimum_learning_rate": 2.5e-06,
+  "warmup_steps": 200,
+  "weight_decay": 1e-10,
+  "gradient_clip": 10.0,
+  "eval_every": 500,
+  "minimum_steps": 5000,
+  "patience_evaluations": 1000,
+  "validation_frames_per_episode": 10,
+  "save_last": true,
+  "evaluation": "real_offline",
+  "train_vlm": true,
+  "trim_static_head": {
+    "tolerance_deg": 2.0,
+    "keep_frames": 5
+  },
+  "trim_static_tail": {
+    "tolerance_deg": 2.0,
+    "keep_frames": 15
+  },
+  "correction_repeat": 1,
+  "advantage": {
+    "labels": "runs/so101_value_v2_labels/labels.npz",
+    "dropout": 0.3
+  },
+  "training_scope": "full fine-tuning (train_vlm) as experiment 4/5, plus the RECAP indicator (so101vla/advantage.py)",
+  "schedule_source": "experiment 5's schedule (lr 5e-5, warmup 200, cosine to 2.5e-6, 5000 steps of 16 x 4) from v5 best; RECAP retrains from the same starting checkpoint each iteration",
+  "data_scope": "RECAP v1 plus 300 twin v2/v2b episodes; original policy validation/test splits unchanged. Deliberate miss frames forced negative; human corrections forced positive. Labels from the existing value v1; no new value training."
+}

@@ -22,6 +22,9 @@ def load_policy(args):
     config.load_vlm_weights = False
     policy = SmolVLAPolicy.from_pretrained(args.model_dir, config=config, strict=True)
     policy.to(args.device).eval()
+    from so101vla import advantage
+    if advantage.marked(args.model_dir):
+        advantage.enable(policy, args.vlm_assets_dir)  # RECAP checkpoint: conditioned on "Advantage: positive"
     pre, post = make_pre_post_processors(
         config, str(args.model_dir), preprocessor_overrides={
             'tokenizer_processor': {'tokenizer_name': str(Path(args.vlm_assets_dir).resolve())},

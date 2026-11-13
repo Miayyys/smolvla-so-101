@@ -1,0 +1,207 @@
+{
+  "selection_seed": 20261113,
+  "scope": "clean v2/v2b episodes; one per split/family/side, selected before policy evaluation",
+  "mapping": "original 540-episode v1 outcomes followed by local v2/v2b twin_expert sidecars; verified against 840-episode partition and previously checked server provenance for 5011/5017",
+  "cases": [
+    {
+      "name": "train_7013",
+      "group": "train",
+      "merged_episode": 819,
+      "source": "so101_twin_gen_v2b_512",
+      "source_episode": 43,
+      "expert_recording": "runs/twin/generated_v2b/ep_007013",
+      "family": "bar",
+      "side": "left"
+    },
+    {
+      "name": "train_1114",
+      "group": "train",
+      "merged_episode": 642,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 102,
+      "expert_recording": "runs/twin/generated_v2/ep_001114",
+      "family": "bar",
+      "side": "right"
+    },
+    {
+      "name": "train_3074",
+      "group": "train",
+      "merged_episode": 759,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 219,
+      "expert_recording": "runs/twin/generated_v2/ep_003074",
+      "family": "key",
+      "side": "left"
+    },
+    {
+      "name": "train_5009",
+      "group": "train",
+      "merged_episode": 784,
+      "source": "so101_twin_gen_v2b_512",
+      "source_episode": 8,
+      "expert_recording": "runs/twin/generated_v2b/ep_005009",
+      "family": "key",
+      "side": "right"
+    },
+    {
+      "name": "train_3050",
+      "group": "train",
+      "merged_episode": 737,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 197,
+      "expert_recording": "runs/twin/generated_v2/ep_003050",
+      "family": "bent",
+      "side": "left"
+    },
+    {
+      "name": "train_1038",
+      "group": "train",
+      "merged_episode": 572,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 32,
+      "expert_recording": "runs/twin/generated_v2/ep_001038",
+      "family": "bent",
+      "side": "right"
+    },
+    {
+      "name": "train_1016",
+      "group": "train",
+      "merged_episode": 553,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 13,
+      "expert_recording": "runs/twin/generated_v2/ep_001016",
+      "family": "hammer",
+      "side": "left"
+    },
+    {
+      "name": "train_1027",
+      "group": "train",
+      "merged_episode": 563,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 23,
+      "expert_recording": "runs/twin/generated_v2/ep_001027",
+      "family": "hammer",
+      "side": "right"
+    },
+    {
+      "name": "train_7008",
+      "group": "train",
+      "merged_episode": 815,
+      "source": "so101_twin_gen_v2b_512",
+      "source_episode": 39,
+      "expert_recording": "runs/twin/generated_v2b/ep_007008",
+      "family": "dumbbell",
+      "side": "left"
+    },
+    {
+      "name": "train_3042",
+      "group": "train",
+      "merged_episode": 731,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 191,
+      "expert_recording": "runs/twin/generated_v2/ep_003042",
+      "family": "dumbbell",
+      "side": "right"
+    },
+    {
+      "name": "validation_1148",
+      "group": "validation",
+      "merged_episode": 672,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 132,
+      "expert_recording": "runs/twin/generated_v2/ep_001148",
+      "family": "bar",
+      "side": "left"
+    },
+    {
+      "name": "validation_7025",
+      "group": "validation",
+      "merged_episode": 830,
+      "source": "so101_twin_gen_v2b_512",
+      "source_episode": 54,
+      "expert_recording": "runs/twin/generated_v2b/ep_007025",
+      "family": "bar",
+      "side": "right"
+    },
+    {
+      "name": "validation_3058",
+      "group": "validation",
+      "merged_episode": 745,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 205,
+      "expert_recording": "runs/twin/generated_v2/ep_003058",
+      "family": "key",
+      "side": "left"
+    },
+    {
+      "name": "validation_3001",
+      "group": "validation",
+      "merged_episode": 691,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 151,
+      "expert_recording": "runs/twin/generated_v2/ep_003001",
+      "family": "key",
+      "side": "right"
+    },
+    {
+      "name": "validation_7019",
+      "group": "validation",
+      "merged_episode": 824,
+      "source": "so101_twin_gen_v2b_512",
+      "source_episode": 48,
+      "expert_recording": "runs/twin/generated_v2b/ep_007019",
+      "family": "bent",
+      "side": "left"
+    },
+    {
+      "name": "validation_1083",
+      "group": "validation",
+      "merged_episode": 613,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 73,
+      "expert_recording": "runs/twin/generated_v2/ep_001083",
+      "family": "bent",
+      "side": "right"
+    },
+    {
+      "name": "validation_1113",
+      "group": "validation",
+      "merged_episode": 641,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 101,
+      "expert_recording": "runs/twin/generated_v2/ep_001113",
+      "family": "hammer",
+      "side": "left"
+    },
+    {
+      "name": "validation_1134",
+      "group": "validation",
+      "merged_episode": 659,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 119,
+      "expert_recording": "runs/twin/generated_v2/ep_001134",
+      "family": "hammer",
+      "side": "right"
+    },
+    {
+      "name": "validation_7024",
+      "group": "validation",
+      "merged_episode": 829,
+      "source": "so101_twin_gen_v2b_512",
+      "source_episode": 53,
+      "expert_recording": "runs/twin/generated_v2b/ep_007024",
+      "family": "dumbbell",
+      "side": "left"
+    },
+    {
+      "name": "validation_1018",
+      "group": "validation",
+      "merged_episode": 555,
+      "source": "so101_twin_gen_v2_512",
+      "source_episode": 15,
+      "expert_recording": "runs/twin/generated_v2/ep_001018",
+      "family": "dumbbell",
+      "side": "right"
+    }
+  ]
+}
